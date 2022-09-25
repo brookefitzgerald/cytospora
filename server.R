@@ -14,8 +14,7 @@ library(scales)
 
 # Define server logic required to draw a histogram
 shinyServer(function(input, output) {
-  #get_year_start <- reactive(function(){input$year_start})
-  
+
   #Run simulations within reactive element
   tree_health <- reactive({
     simulateControlScenarios(
