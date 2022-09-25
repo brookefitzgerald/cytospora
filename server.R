@@ -21,13 +21,15 @@ shinyServer(function(input, output) {
     simulateControlScenarios(
       year_start = input$year_start,
       year_end = input$year_end,
+      disease_spread_rate = input$disease_spread_rate/100, # function expects a percentage (fraction)
+      disease_growth_rate = input$disease_growth_rate/100,
       max_yield = input$max_yield/576, #may want to make the number of trees an input
       output_price = input$output_price,
       annual_cost = input$annual_cost,
       inf_intro = input$inf_intro,
-      control1 = input$control1,
+      control1 = input$control1/100,
       t1_cost = input$t1_cost,
-      control2 = input$control2,
+      control2 = input$control2/100,
       t2_cost = input$t2_cost
     )})
   

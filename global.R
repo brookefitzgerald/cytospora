@@ -107,54 +107,43 @@ tree_sim <- function(o_rows=24, #Block dimension row
 }
 
 ## Function to run different disease control scenarios
-simulateControlScenarios <- function(year_start=2022,
-                                     year_end=2062,
-                                     max_yield=13000,
-                                     output_price=1.,
-                                     annual_cost=5885,
-                                     inf_intro=10,
-                                     control1=10,
-                                     t1_cost=350,
-                                     control2=10,
-                                     t2_cost=650){
+simulateControlScenarios <- function(year_start,
+                                     year_end,
+                                     disease_spread_rate,
+                                     disease_growth_rate,
+                                     max_yield,
+                                     output_price,
+                                     annual_cost,
+                                     inf_intro,
+                                     control1,
+                                     t1_cost,
+                                     control2,
+                                     t2_cost){
+  # set all of the same settings that are shared between simulations 
   time_horizon = year_end - year_start
+  tree_sim_with_shared_settings <- partial(tree_sim, 
+                                           TH=time_horizon,
+                                           start_year=year_start,
+                                           max_yield=max_yield,
+                                           annual_cost=annual_cost,
+                                           output_price=output_price,
+                                           disease_spread_rate=disease_spread_rate,
+                                           disease_growth_rate=disease_growth_rate)
   
-  tree_health_max <- tree_sim(TH=time_horizon,
-                              start_year=year_start,
-                              max_yield=max_yield,
-                              annual_cost = annual_cost,
-                              output_price = output_price,
-                              inf_starts = 0) %>%   #inf_starts=0 implies no infection for max yield
+  tree_health_max <- tree_sim_with_shared_settings(inf_starts = 0) %>%   #inf_starts=0 implies no infection for max yield
     rename_with(~str_c("max_",.),-c(x,y,time))
   
-  tree_health_nt <- tree_sim(TH=time_horizon,
-                             start_year=year_start,
-                             max_yield=max_yield,
-                             annual_cost = annual_cost,
-                             output_price = output_price,
-                             inf_starts = inf_intro) %>%   #nt implies no treatment
+  tree_health_nt <- tree_sim_with_shared_settings(inf_starts = inf_intro) %>%   #nt implies no treatment
     rename_with(~str_c("nt_",.),-c(x,y,time))
   
   #Simulate two control simulations
   #Treatment 1
-  t1 <- tree_sim(TH=time_horizon,
-                 start_year=year_start,
-                 max_yield=max_yield,
-                 inf_starts = inf_intro,
-                 annual_cost = annual_cost,
-                 output_price = output_price,
-                 control_effort = control1/100,
+  t1 <- tree_sim_with_shared_settings(control_effort = control1,
                  control_cost = t1_cost) %>%
     rename_with(~str_c("t1_",.),-c(x,y,time))
   
   #Treatment 2
-  t2 <- tree_sim(TH=time_horizon,
-                 start_year=year_start,
-                 max_yield=max_yield,
-                 inf_starts = inf_intro,
-                 annual_cost = annual_cost,
-                 output_price = output_price,
-                 control_effort = control2/100,
+  t2 <- tree_sim_with_shared_settings(control_effort = control2,
                  control_cost = t2_cost) %>%
     rename_with(~str_c("t2_",.),-c(x,y,time))
   
