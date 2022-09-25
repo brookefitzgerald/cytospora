@@ -15,58 +15,24 @@ library(scales)
 # Define server logic required to draw a histogram
 shinyServer(function(input, output) {
 
-  
-  
   #Run simulations within reactive element
   tree_health <- reactive({
-    time_horizon = input$year_end-input$year_start
-    max_yield = input$max_yield/576 #may want to make the number of trees an input
-    output_price=input$output_price
-    annual_cost = input$annual_cost  
-    
-    tree_health_max <- tree_sim(TH=time_horizon,
-                                max_yield=max_yield,
-                                annual_cost = annual_cost,
-                                output_price = output_price,
-                                inf_starts = 0) %>%   #inf_starts=0 implies no infection for max yield
-      rename_with(~str_c("max_",.),-c(x,y,time))
-    
-    tree_health_nt <- tree_sim(TH=time_horizon,
-                               max_yield=max_yield,
-                               annual_cost = annual_cost,
-                               output_price = output_price,
-                               inf_starts = input$inf_intro) %>%   #nt implies no treatment
-      rename_with(~str_c("nt_",.),-c(x,y,time))
-    
-    #Simulate two control simulations
-    #Treatment 1
-    t1 <- tree_sim(TH=time_horizon,
-                   max_yield=max_yield,
-                   inf_starts = input$inf_intro,
-                   annual_cost = annual_cost,
-                   output_price = output_price,
-                   control_effort = input$control1/100,
-                   control_cost = input$t1_cost) %>%
-      rename_with(~str_c("t1_",.),-c(x,y,time))
-    
-    #Treatment 2
-    t2 <- tree_sim(TH=time_horizon,
-                   max_yield=max_yield,
-                   inf_starts = input$inf_intro,
-                   annual_cost = annual_cost,
-                   output_price = output_price,
-                   control_effort = input$control2/100,
-                   control_cost = input$t2_cost) %>%
-      rename_with(~str_c("t2_",.),-c(x,y,time))
-    
-    inner_join(tree_health_nt,tree_health_max, by = c("x", "y", "time")) %>%
-      inner_join(t1, by = c("x", "y", "time")) %>%
-      inner_join(t2, by = c("x", "y", "time")) %>%
-      rename(`Max Yield`=max_value,`No Treatment`=nt_value,`Treatment 1`=t1_value,`Treatment 2`=t2_value)
-  })
+    simulateControlScenarios(
+      year_start = input$year_start,
+      year_end = input$year_end,
+      disease_spread_rate = input$disease_spread_rate/100, # function expects a percentage (fraction)
+      disease_growth_rate = input$disease_growth_rate/100,
+      max_yield = input$max_yield/576, #may want to make the number of trees an input
+      output_price = input$output_price,
+      annual_cost = input$annual_cost,
+      inf_intro = input$inf_intro,
+      control1 = input$control1/100,
+      t1_cost = input$t1_cost,
+      control2 = input$control2/100,
+      t2_cost = input$t2_cost
+    )})
   
     output$orchard_health <- renderPlot({
- 
       #Raster blocks with color indicating disease spread
       tree_health() %>%
         dplyr::select(-ends_with("net_returns")) %>%
@@ -89,12 +55,12 @@ shinyServer(function(input, output) {
         facet_wrap(~name,nrow = 1)
 
     })
-    
+
     output$tree_health <- renderPlot({
-      
+
       #Plot of individual tree growth
       # tree_health() %>%
-      #   dplyr::filter(x==input$tree_col,y==input$tree_row) %>% 
+      #   dplyr::filter(x==input$tree_col,y==input$tree_row) %>%
       #   pivot_longer(-c(x,y,time)) %>%
       #   ggplot(aes(x=time-1,y=value-1,color=name)) +
       #   geom_line() +
@@ -103,7 +69,7 @@ shinyServer(function(input, output) {
       #   labs(x="Year",y="Yield",title="Tree Growth Path") +
       #   theme_bw(base_size = 15) +
       #   theme(legend.title = element_blank(),legend.position = "bottom")
-      
+
       #Plot of block growth
       tree_health() %>%
         dplyr::select(-ends_with("net_returns")) %>%
@@ -120,14 +86,14 @@ shinyServer(function(input, output) {
         labs(x="Year",y="Yield",title="Block Yield Over Time") +
         theme_bw(base_size = 15) +
         theme(legend.title = element_blank(),legend.position = "bottom")  #Need to split legend over two rows
-      
+
     })
-    
+
     output$mytable <- DT::renderDataTable({
       DT::datatable(bind_rows(
                     #Row 1: yield
-                    tree_health() %>%  
-                      mutate(across(-c(x,y,time),~ifelse(.<0,0,.))) %>% 
+                    tree_health() %>%
+                      mutate(across(-c(x,y,time),~ifelse(.<0,0,.))) %>%
                       group_by(time) %>%
                       summarize(across(-c(x,y),~sum(.,na.rm = T))) %>%
                       ungroup() %>%
@@ -136,8 +102,8 @@ shinyServer(function(input, output) {
                       select(`Max Yield`,`No Treatment`,`Treatment 1`,`Treatment 2`) %>%
                       add_column(`Economic Result`="Yield (avg/ac/yr)",.before = 1),
                     #Row 2: net returns
-                    tree_health() %>%  
-                      mutate(across(-c(x,y,time),~ifelse(.<0,0,.))) %>% 
+                    tree_health() %>%
+                      mutate(across(-c(x,y,time),~ifelse(.<0,0,.))) %>%
                       group_by(time) %>%
                       summarize(across(-c(x,y),~sum(.,na.rm = T))) %>%
                       ungroup() %>%
@@ -147,8 +113,8 @@ shinyServer(function(input, output) {
                       rename(`Max Yield`=max_net_returns,`No Treatment`=nt_net_returns,`Treatment 1`=t1_net_returns,`Treatment 2`=t2_net_returns) %>%
                       add_column(`Economic Result`="Net Returns (avg/ac/yr)",.before = 1),
                     #Row 3: benefit of treatment
-                    tree_health() %>%  
-                      mutate(across(-c(x,y,time),~ifelse(.<0,0,.))) %>% 
+                    tree_health() %>%
+                      mutate(across(-c(x,y,time),~ifelse(.<0,0,.))) %>%
                       group_by(time) %>%
                       summarize(across(-c(x,y),~sum(.,na.rm = T))) %>%
                       ungroup() %>%
@@ -162,12 +128,12 @@ shinyServer(function(input, output) {
                              `No Treatment`="") %>%
                       add_column(`Economic Result`="Treatment Returns (avg/ac/yr)",.before = 1),
                     #Row 4: operating duration
-                    tree_health() %>%  
-                      #mutate(across(-c(x,y,time),~ifelse(.<0,0,.))) %>% 
+                    tree_health() %>%
+                      #mutate(across(-c(x,y,time),~ifelse(.<0,0,.))) %>%
                       group_by(time) %>%
                       summarize(across(-c(x,y),~sum(.,na.rm = T))) %>%
                       ungroup() %>%
-                      filter(time>input$year_start+5) %>% 
+                      filter(time>input$year_start+5) %>%
                       summarise(`Treatment 1`=as.character(first(time[t1_net_returns<0])),
                                 `Treatment 2`=as.character(first(time[t2_net_returns<0])),
                                 `No Treatment`=as.character(first(time[nt_net_returns<0]))) %>%
@@ -181,6 +147,6 @@ shinyServer(function(input, output) {
                                    ),
                     rownames = FALSE)
     })
-    
+
   
 })
