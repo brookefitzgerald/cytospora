@@ -52,9 +52,9 @@ tree_sim <- function(o_rows=24, #Block dimension row
     
   
   #Disease spread matrix 
-  xtmat <- (shift.right(eye(o_rows,o_cols)) + shift.left(eye(o_rows,o_cols)))*disease_spread_rate + eye(o_rows,o_cols)*(1+disease_growth_rate)
-  ytmat <- (shift.right(eye(o_rows,o_cols)) + shift.left(eye(o_rows,o_cols)))*disease_spread_rate
-  
+  tmat_identity  <- eye(o_rows,o_cols)*(1+disease_growth_rate)
+  tmat_x <- (shift.right(eye(o_rows,o_cols)) + shift.left(eye(o_rows,o_cols)))*disease_spread_rate
+  tmat_y <- tmat_x
   
   #Initial conditions
   #Trees
@@ -63,7 +63,6 @@ tree_sim <- function(o_rows=24, #Block dimension row
   #Disease
   disease_shell <- vector("list",TH)
   disease_shell[[1]] <- inf_mat
-  #Control
   
   
   ####################################
@@ -72,7 +71,7 @@ tree_sim <- function(o_rows=24, #Block dimension row
     tree_shell[[t+1]] <- tree_shell[[t]] + growth_function(t) - disease_shell[[t]]
     
     #Propogate disease
-    disease_shell[[t+1]] <- disease_shell[[t]]%*%xtmat + t(t(disease_shell[[t]])%*%ytmat)
+    disease_shell[[t+1]] <- disease_shell[[t]]%*%(tmat_x + tmat_identity) + t(t(disease_shell[[t]])%*%tmat_y)
     
     #Disease is detected with some prob, and action is taken to curtail disease spread
     #if()
