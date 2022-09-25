@@ -12,7 +12,6 @@ library(tidyverse)
 library(scales)
 #source("global.R")
 
-# Define server logic required to draw a histogram
 shinyServer(function(input, output) {
 
   #Run simulations within reactive element
@@ -25,6 +24,8 @@ shinyServer(function(input, output) {
       max_yield = input$max_yield/576, #may want to make the number of trees an input
       output_price = input$output_price,
       annual_cost = input$annual_cost,
+      replanting_strategy = input$replanting_strategy,
+      tree_replant_cost = input$tree_replant_cost,
       inf_intro = input$inf_intro,
       control1 = input$control1/100,
       t1_cost = input$t1_cost,
@@ -53,7 +54,6 @@ shinyServer(function(input, output) {
         coord_equal() +
         labs(title = "Block Health") +
         facet_wrap(~name,nrow = 1)
-
     })
 
     output$tree_health <- renderPlot({
