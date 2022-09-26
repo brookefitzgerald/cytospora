@@ -88,17 +88,10 @@ tree_sim <- function(o_rows=24, #Block dimension row
     
     #Disease is detected with some prob, and action is taken to curtail disease spread
     #if()
-    
     #Disease is mitigated if present
     if(control_effort>0){
-      for(i in 1:ncol(disease_shell[[t+1]])){
-        for(j in 1:nrow(disease_shell[[t+1]])){
-          if(disease_shell[[t+1]][j,i]>0){
-            disease_shell[[t+1]][j,i] <- disease_shell[[t+1]][j,i]*(1-control_effort)
-            if(disease_shell[[t+1]][j,i]<0) disease_shell[[t+1]][j,i] <- 0
-          }
-        }
-      }
+      disease_shell[[t+1]] <- disease_shell[[t+1]]*(1-control_effort)
+      disease_shell[[t+1]] <- pmax(zeros(o_rows, o_cols), disease_shell[[t+1]]) # sets any negatives to zero
     }
     
     #Replace dead trees if part of mitigation strategy
