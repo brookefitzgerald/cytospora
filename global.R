@@ -5,7 +5,7 @@ tree_sim <- function(o_rows=24, #Block dimension row
                      TH=40,     #Time Horizon
                      start_year=2022, #year simulation starts (only used to transform time at end)
                      replant_trees=FALSE, #Replant tree if the tree dies
-                     tree_replant_cost=100, #Cost to replant an individual tree
+                     replant_cost_tree=10, #Cost to replant an individual tree
                      mature_year=5,  #Year tree reaches maturity
                      tree_end=40,    #Productive life of tree
                      max_yield=10,   #Yield at maturity
@@ -73,7 +73,7 @@ tree_sim <- function(o_rows=24, #Block dimension row
   #TreeAge
   age_shell <- vector("list",TH)
   age_shell[[1]] <- orc_mat
-  trees_replanted = 0
+  n_trees_replanted = 0
   
   ####################################
   for(t in 1:(TH-1)){
@@ -107,7 +107,7 @@ tree_sim <- function(o_rows=24, #Block dimension row
       age_shell[[t+1]][to_replant] <- 1.0 # Replanted tree is 1 year old
       tree_shell[[t+1]][to_replant] <- 1.0 # Replanted tree has initial yields
       disease_shell[[t+1]][to_replant] <- 0.0 # Replanted tree is healthy
-      trees_replanted <- trees_replanted + sum(to_replant)
+      n_trees_replanted <- n_trees_replanted + sum(to_replant)
     }
     
     
@@ -115,11 +115,12 @@ tree_sim <- function(o_rows=24, #Block dimension row
   
   realized_costs <- annual_cost
   if(control_effort>0){
-    realized_costs = realized_costs + control_cost
-  } 
-  # if (trees_replanted>0){
-  #   realized_costs = realized_costs + (trees_replanted*tree_replant_cost)
-  # }
+    realized_costs <- realized_costs + control_cost
+  }
+  if (n_trees_replanted>0){
+    # TODO: figure out why the replanting cost has such a huge impact 
+    # realized_costs <- realized_costs + (n_trees_replanted*replant_cost_tree)
+  }
   
   tree_health <- map2_dfr(tree_shell,c(1:TH),
                           function(tree,cntr){
@@ -137,7 +138,7 @@ simulateControlScenarios <- function(year_start,
                                      disease_spread_rate,
                                      disease_growth_rate,
                                      replanting_strategy,
-                                     tree_replant_cost,
+                                     replant_cost_tree,
                                      max_yield,
                                      output_price,
                                      annual_cost,
@@ -154,7 +155,7 @@ simulateControlScenarios <- function(year_start,
                                            TH=time_horizon,
                                            start_year=year_start,
                                            replant_trees=(replanting_strategy=='yr1_replant'),
-                                           tree_replant_cost=tree_replant_cost,
+                                           replant_cost_tree=replant_cost_tree,
                                            max_yield=max_yield,
                                            annual_cost=annual_cost,
                                            output_price=output_price,

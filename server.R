@@ -25,7 +25,7 @@ shinyServer(function(input, output) {
       output_price = input$output_price,
       annual_cost = input$annual_cost,
       replanting_strategy = input$replanting_strategy,
-      tree_replant_cost = input$tree_replant_cost,
+      replant_cost_tree = input$replant_cost_tree,
       inf_intro = input$inf_intro,
       control1 = input$control1/100,
       t1_cost = input$t1_cost,

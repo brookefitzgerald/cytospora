@@ -51,7 +51,7 @@ shinyUI(
                          selected = 'no_replant'),
             numericInput("replant_cost_tree",
                          "Tree Replanting Cost",
-                         100),
+                         10),
             numericInput("replant_cost_orchard",
                          "Orchard Replanting Cost",
                          5500),
