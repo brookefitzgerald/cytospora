@@ -6,6 +6,7 @@ tree_sim <- function(o_rows=24, #Block dimension row
                      start_year=2022, #year simulation starts (only used to transform time at end)
                      replant_trees=FALSE, #Replant tree if the tree dies
                      replant_cost_tree=10, #Cost to replant an individual tree
+                     start_disease_year=1, #Year infection starts in the orchard
                      mature_year=5,  #Year tree reaches maturity
                      tree_end=40,    #Productive life of tree
                      max_yield=10,   #Yield at maturity
@@ -26,7 +27,7 @@ tree_sim <- function(o_rows=24, #Block dimension row
   set.seed(sim_seed) #Setting seed for random number generation
   
   #There is an orchard of nxm trees.  
-  orc_mat <- ones(o_rows,o_cols)
+  orc_mat <- ones(o_rows, o_cols)
   
   #Growth function - trees mature in y years and survive for yT years
   growth_function <- approxfun(x=c(0,2,mature_year+1,tree_end),
@@ -49,9 +50,9 @@ tree_sim <- function(o_rows=24, #Block dimension row
   
   
   #Seed infection 
-  inf_mat <- zeros(o_rows,o_cols)
+  inf_mat <- zeros(o_rows, o_cols)
   if(inf_starts>0){
-    inf_location=t(replicate(inf_starts,c(sample(o_rows,1),sample(o_cols,1)))) 
+    inf_location<-t(replicate(inf_starts,c(sample(o_rows,1),sample(o_cols,1)))) 
     for(i in 1:dim(inf_location)[1]){
       inf_mat[inf_location[i,1],inf_location[i,2]] <- 1
     }
@@ -68,8 +69,10 @@ tree_sim <- function(o_rows=24, #Block dimension row
   tree_shell <- vector("list",TH)
   tree_shell[[1]] <- orc_mat
   #Disease
-  disease_shell <- vector("list",TH)
-  disease_shell[[1]] <- inf_mat
+  disease_shell <- array(data = NA, dim=c(o_rows, o_cols, TH))
+  disease_shell[,,1:(start_disease_year - 1)] <- 0
+  disease_shell[,,start_disease_year] <- inf_mat
+
   #TreeAge
   age_shell <- vector("list",TH)
   age_shell[[1]] <- orc_mat
@@ -81,29 +84,30 @@ tree_sim <- function(o_rows=24, #Block dimension row
     age_shell[[t+1]] <- age_shell[[t]] + 1
     
     #Grow trees subject to damage
-    tree_shell[[t+1]] <- tree_shell[[t]] + grow_trees(age_shell[[t]]) - disease_shell[[t]]
+    tree_shell[[t+1]] <- tree_shell[[t]] + grow_trees(age_shell[[t]]) - disease_shell[,,t]
     
-    #Propagate disease
-    disease_shell[[t+1]] <- disease_shell[[t]]%*%(tmat_x + tmat_identity) + t(t(disease_shell[[t]])%*%tmat_y)
-    
-    #Disease is detected with some prob, and action is taken to curtail disease spread
-    #if()
-    #Disease is mitigated if present
-    if(control_effort>0){
-      disease_shell[[t+1]] <- disease_shell[[t+1]]*(1-control_effort)
-      disease_shell[[t+1]] <- pmax(zeros(o_rows, o_cols), disease_shell[[t+1]]) # sets any negatives to zero
+    #Propagate disease if disease spread has started
+    if (t >= start_disease_year){
+      disease_shell[,,t+1] <- disease_shell[,,t]%*%(tmat_x + tmat_identity) + t(t(disease_shell[,,t])%*%tmat_y)
+      
+      #Disease is detected with some prob, and action is taken to curtail disease spread
+      #if()
+      
+      #Disease is mitigated if present
+      if(control_effort>0){
+        disease_shell[,,t+1] <- disease_shell[,,t+1]*(1-control_effort)
+        disease_shell[,,t+1] <- pmax(zeros(o_rows, o_cols), disease_shell[,,t+1]) # sets any negatives to zero
+      }
+      
+      #Replace dead trees if part of mitigation strategy
+      if(replant_trees==TRUE){
+        to_replant <- tree_shell[[t+1]] <= 0.0 #Boolean indicating true if dead, false otherwise
+        age_shell[[t+1]][to_replant] <- 1.0 # Replanted tree is 1 year old
+        tree_shell[[t+1]][to_replant] <- 1.0 # Replanted tree has initial yields
+        disease_shell[,,t+1][to_replant] <- 0.0 # Replanted tree is healthy
+        n_trees_replanted <- n_trees_replanted + sum(to_replant)
+      }
     }
-    
-    #Replace dead trees if part of mitigation strategy
-    if(replant_trees==TRUE){
-      to_replant <- tree_shell[[t+1]] <= 0.0 #Boolean indicating true if dead, false otherwise
-      age_shell[[t+1]][to_replant] <- 1.0 # Replanted tree is 1 year old
-      tree_shell[[t+1]][to_replant] <- 1.0 # Replanted tree has initial yields
-      disease_shell[[t+1]][to_replant] <- 0.0 # Replanted tree is healthy
-      n_trees_replanted <- n_trees_replanted + sum(to_replant)
-    }
-    
-    
   }
   
   realized_costs <- annual_cost
@@ -128,6 +132,7 @@ tree_sim <- function(o_rows=24, #Block dimension row
 ## Function to run different disease control scenarios
 simulateControlScenarios <- function(year_start,
                                      year_end,
+                                     start_disease_year,
                                      disease_spread_rate,
                                      disease_growth_rate,
                                      replanting_strategy,
@@ -147,6 +152,7 @@ simulateControlScenarios <- function(year_start,
   tree_sim_with_shared_settings <- partial(tree_sim, 
                                            TH=time_horizon,
                                            start_year=year_start,
+                                           start_disease_year=start_disease_year,
                                            replant_trees=(replanting_strategy=='yr1_replant'),
                                            replant_cost_tree=replant_cost_tree,
                                            max_yield=max_yield,
