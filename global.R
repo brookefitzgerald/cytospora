@@ -74,13 +74,21 @@ tree_sim <- function(o_rows=24, #Block dimension row
   disease_shell[,,1:(start_disease_year - 1)] <- 0 
   disease_shell[,,start_disease_year] <- inf_mat
 
-  #TreeAge
+  #Tree Age
   age_shell <- vector("list",TH)
   age_shell[[1]] <- orc_mat
   n_trees_replanted = 0
   
+  #Costs
+  cost_shell <- vector("numeric",TH)
+  cost_shell[[t]] <- annual_cost # the first year will not include costs of control, replanting, etc.
+  #TODO: figure out a clean way to calculate accurate costs for the first year
+  
   ####################################
   for(t in 1:(TH-1)){
+    #Orchard costs money to run
+    cost_shell[[t+1]] <- annual_cost
+    
     #Trees age each year
     age_shell[[t+1]] <- age_shell[[t]] + 1
     
@@ -98,6 +106,7 @@ tree_sim <- function(o_rows=24, #Block dimension row
       if(control_effort>0){
         disease_shell[,,t+1] <- disease_shell[,,t+1]*(1-control_effort)
         disease_shell[,,t+1] <- pmax(zeros(o_rows, o_cols), disease_shell[,,t+1]) # sets any negatives to zero
+        cost_shell[[t+1]] <- cost_shell[[t+1]] + control_cost
       }
       
       #Replace dead trees if part of mitigation strategy
@@ -106,26 +115,20 @@ tree_sim <- function(o_rows=24, #Block dimension row
         age_shell[[t+1]][to_replant] <- 1.0 # Replanted tree is 1 year old
         tree_shell[[t+1]][to_replant] <- 1.0 # Replanted tree has initial yields
         disease_shell[,,t+1][to_replant] <- 0.0 # Replanted tree is healthy
-        n_trees_replanted <- n_trees_replanted + sum(to_replant)
+        cost_shell[[t+1]] <- cost_shell[[t+1]] + sum(to_replant)*replant_cost_tree # Number of trees replanted times their cost
       }
     }
   }
   
-  realized_costs <- annual_cost
-  if(control_effort>0){
-    realized_costs <- realized_costs + control_cost
-  }
-  if (n_trees_replanted>0){
-    # TODO: figure out why the replanting cost has such a huge impact 
-    realized_costs <- realized_costs + (n_trees_replanted*replant_cost_tree)
-  }
-  
-  tree_health <- map2_dfr(tree_shell,c(1:TH),
-                          function(tree,cntr){
+  tree_health <- pmap_df(list(tree_shell, c(1:TH), cost_shell),
+                          function(tree, cntr, yearly_cost){
                             bind_cols(expand_grid(x=c(1:o_cols),y=c(1:o_rows)),value=as.vector(tree)) %>%
-                              add_column(time=start_year + cntr - 1)
+                            add_column(
+                              time=start_year + cntr - 1,
+                              cost_per_year_per_tree=yearly_cost/numel(orc_mat),
+                            )
                           }) %>%
-    mutate(net_returns=output_price*value - (realized_costs/numel(orc_mat)))
+    mutate(net_returns=output_price*value - cost_per_year_per_tree)
   
   return(tree_health)
 }
