@@ -125,10 +125,10 @@ tree_sim <- function(o_rows=24, #Block dimension row
                             bind_cols(expand_grid(x=c(1:o_cols),y=c(1:o_rows)),value=as.vector(tree)) %>%
                             add_column(
                               time=start_year + cntr - 1,
-                              cost_per_year_per_tree=yearly_cost/numel(orc_mat),
+                              realized_costs=yearly_cost/numel(orc_mat),
                             )
                           }) %>%
-    mutate(net_returns=output_price*value - cost_per_year_per_tree)
+    mutate(net_returns=output_price*value - realized_costs)
   
   return(tree_health)
 }
