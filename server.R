@@ -10,9 +10,42 @@
 library(shiny)
 library(tidyverse)
 library(scales)
+library(shinyjqui)
 #source("global.R")
 
-shinyServer(function(input, output) {
+shinyServer(function(input, output, session) {
+  # Hide dashboard by default
+  jqui_hide(
+    ui = "#div_dashboard", 
+    effect = "blind"
+  )
+  
+  observeEvent(input$go_to_app, {
+    # if user has clicked away from landing page:
+    # first switch to tab `dashboard`:
+      updateTabsetPanel(
+        session = session, 
+        inputId = "panels", 
+        selected = "dashboard"
+      )
+      
+      # then show it's contents:
+      jqui_show(
+        ui = "#div_dashboard", 
+        effect = "blind", 
+        duration = 0
+      )
+  }
+  )
+  output$logo <- renderImage(
+    expr=list(
+      class= "center",
+      src = "static/images/logo.png",
+      contentType = "image/png",
+      alt = "CSU Logo",
+      height = "100%"),
+    deleteFile=FALSE,
+  )
 
   #Run simulations within reactive element
   tree_health <- reactive({

@@ -118,7 +118,7 @@ tree_sim <- function(o_rows=24, #Block dimension row
   }
   if (n_trees_replanted>0){
     # TODO: figure out why the replanting cost has such a huge impact 
-    # realized_costs <- realized_costs + (n_trees_replanted*replant_cost_tree)
+    realized_costs <- realized_costs + (n_trees_replanted*replant_cost_tree)
   }
   
   tree_health <- map2_dfr(tree_shell,c(1:TH),
