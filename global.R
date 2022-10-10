@@ -57,7 +57,6 @@ tree_sim <- function(o_rows=24, #Block dimension row
       inf_mat[inf_location[i,1],inf_location[i,2]] <- 1
     }
   }
-    
   
   #Disease spread matrix 
   tmat_identity  <- eye(o_rows,o_cols)*(1+disease_growth_rate)
