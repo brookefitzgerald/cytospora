@@ -48,9 +48,12 @@ shinyServer(function(input, output, session) {
   )
 
   #Run simulations within reactive element
+  start_year <- reactive(input$year_start)
+  current_year <- reactive(start_year() + input$year - 1)
+  
   tree_health <- reactive({
     simulateControlScenarios(
-      year_start = input$year_start,
+      year_start = start_year(),
       year_end = input$year_end,
       start_disease_year = input$start_disease_year,
       disease_spread_rate = input$disease_spread_rate/100, # function expects a percentage (fraction)
@@ -71,7 +74,7 @@ shinyServer(function(input, output, session) {
       #Raster blocks with color indicating disease spread
       tree_health() %>%
         dplyr::select(-ends_with("net_returns")) %>%
-        dplyr::filter(time==(input$year_start + input$year-1)) %>%
+        dplyr::filter(time==current_year()) %>%
         mutate(across(-c(x,y,time),~./`Max Yield`)) %>%
         dplyr::select(-`Max Yield`) %>%
         pivot_longer(-c(x,y,time)) %>%
@@ -111,7 +114,7 @@ shinyServer(function(input, output, session) {
         ggplot(aes(x=time-1,y=value-1,color=name)) +
         geom_line() +
         geom_point() +
-        geom_vline(xintercept = (input$year_start + input$year-1),linetype="dashed") +
+        geom_vline(xintercept = current_year(),linetype="dashed") +
         scale_y_continuous(labels = label_comma()) +
         labs(x="Year",y="Yield",title="Block Yield Over Time") +
         theme_bw(base_size = 15) +
