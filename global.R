@@ -69,8 +69,10 @@ tree_sim <- function(o_rows=24, #Block dimension row
   tree_shell <- vector("list",TH)
   tree_shell[[1]] <- orc_mat
   #Disease
-  disease_shell <- array(data = NA, dim=c(o_rows, o_cols, TH))
-  disease_shell[,,1:(start_disease_year - 1)] <- 0
+  disease_shell <- array(data = NA, dim=c(o_rows, o_cols, TH)) 
+  # making disease shell an array to initialize when the disease starts ahead of time
+  # keeping tree_shell and age_shell vectors because the access time of elements in vectors is higher than a slice of an array
+  disease_shell[,,1:(start_disease_year - 1)] <- 0 
   disease_shell[,,start_disease_year] <- inf_mat
 
   #TreeAge
