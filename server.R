@@ -19,6 +19,7 @@ shinyServer(function(input, output) {
     simulateControlScenarios(
       year_start = input$year_start,
       year_end = input$year_end,
+      start_disease_year = input$start_disease_year,
       disease_spread_rate = input$disease_spread_rate/100, # function expects a percentage (fraction)
       disease_growth_rate = input$disease_growth_rate/100,
       max_yield = input$max_yield/576, #may want to make the number of trees an input
@@ -42,12 +43,9 @@ shinyServer(function(input, output) {
         dplyr::select(-`Max Yield`) %>%
         pivot_longer(-c(x,y,time)) %>%
         mutate(value=ifelse(value<0,0,value)) %>%
-        #ggplot(aes(x=x,y=y,color=value)) +
         ggplot(aes(x=x,y=y,fill=value)) +
         geom_tile(size=.1,show.legend = F) +
         scale_fill_gradient(name="Tree Health",low = "red", high = "green",limit=c(0,1)) +
-        #geom_point(aes(size=value),show.legend = F) +
-        #scale_color_gradient(name="Tree Health",low = "red", high = "green",limit=c(0,1)) +
         scale_x_continuous(name = "Column",breaks = seq.int(1,24,2),minor_breaks = NULL) +
         scale_y_continuous(name = "Row",breaks = seq.int(1,24,2),minor_breaks = NULL) +
         theme_bw(base_size = 15) +
@@ -81,7 +79,6 @@ shinyServer(function(input, output) {
         geom_line() +
         geom_point() +
         geom_vline(xintercept = (input$year_start + input$year-1),linetype="dashed") +
-        #geom_hline(yintercept = (8900),linetype="dashed") +
         scale_y_continuous(labels = label_comma()) +
         labs(x="Year",y="Yield",title="Block Yield Over Time") +
         theme_bw(base_size = 15) +
