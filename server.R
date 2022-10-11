@@ -103,28 +103,52 @@ shinyServer(function(input, output, session) {
       #   labs(x="Year",y="Yield",title="Tree Growth Path") +
       #   theme_bw(base_size = 15) +
       #   theme(legend.title = element_blank(),legend.position = "bottom")
-
-      #Plot of block growth
-      tree_health() %>%
-        dplyr::select(-ends_with(c("net_returns", "realized_costs"))) %>%
-        mutate(across(-c(x,y,time),~ifelse(.<0,0,.))) %>%
+      
+      #Plot net present value
+      tree_health()  %>%
         group_by(time) %>%
         summarize(across(-c(x,y),~sum(.,na.rm = T))) %>%
-        pivot_longer(-c(time)) %>%
-        ggplot(aes(x=time-1,y=value-1,color=name)) +
+        ungroup() %>% 
+        select(c(ends_with("net_returns"), time)) %>%
+        mutate(t=time-2022, .keep="unused") %>% 
+        arrange(t) %>% # start_year()) %>% #replaces year time column with time index column
+        mutate(across(-c(t),~cumsum(.)/(1+0.06)**t, .names="{.col}_npv")) %>%
+        pivot_longer(ends_with("_npv")) %>%
+        ggplot(aes(x=t-1, y=value-1, color=name)) +
         geom_line() +
         geom_point() +
-        geom_vline(xintercept = current_year(),linetype="dashed") +
         scale_y_continuous(labels = label_comma()) +
-        labs(x="Year",y="Yield",title="Block Yield Over Time") +
+        ylim(-20000, 100000) +
+        labs(x="Year",y="Net present value",title="net present value") +
         theme_bw(base_size = 15) +
-        theme(legend.title = element_blank(),legend.position = "bottom")  #Need to split legend over two rows
+        theme(legend.title = element_blank(),legend.position = "bottom") 
+        
+
+      #Plot of block growth
+      # tree_health() %>%
+      #   dplyr::select(-ends_with(c("net_returns", "realized_costs"))) %>%
+      #   mutate(across(-c(x,y,time),~ifelse(.<0,0,.))) %>%
+      #   group_by(time) %>%
+      #   summarize(across(-c(x,y),~sum(.,na.rm = T))) %>%
+      #   pivot_longer(-c(time)) %>%
+      #   ggplot(aes(x=time-1,y=value-1,color=name)) +
+      #   geom_line() +
+      #   geom_point() +
+      #   geom_vline(xintercept = current_year(),linetype="dashed") +
+      #   scale_y_continuous(labels = label_comma()) +
+      #   labs(x="Year",y="Yield",title="Block Yield Over Time") +
+      #   theme_bw(base_size = 15) +
+      #   theme(legend.title = element_blank(),legend.position = "bottom")  #Need to split legend over two rows
 
     })
 
     output$mytable <- DT::renderDataTable({
       tree_health_aggregated_yearly_cost_yield_and_returns <- tree_health() %>%
         mutate(across(-c(x,y,time),~ifelse(.<0,0,.))) %>%
+        group_by(time) %>%
+        summarize(across(-c(x,y),~sum(.,na.rm = T))) %>%
+        ungroup()
+      tree_health_aggregated_yearly_cost_yield_and_returns_w_negatives <- tree_health()  %>%
         group_by(time) %>%
         summarize(across(-c(x,y),~sum(.,na.rm = T))) %>%
         ungroup()
@@ -154,11 +178,9 @@ shinyServer(function(input, output, session) {
                              `No Treatment`="") %>%
                       add_column(`Economic Result`="Treatment Returns (avg/ac/yr)",.before = 1),
                     #Row 4: operating duration
-                    tree_health()  %>% # chooses the first time the net returns were negative to replant entire orchard
-                      group_by(time) %>%
-                      summarize(across(-c(x,y),~sum(.,na.rm = T))) %>%
-                      ungroup() %>%
+                    tree_health_aggregated_yearly_cost_yield_and_returns_w_negatives %>%
                       filter(time>input$year_start+5) %>%
+                      # chooses the first time the net returns were negative to replant entire orchard
                       summarise(`Treatment 1`=as.character(first(time[t1_net_returns<0])),
                                 `Treatment 2`=as.character(first(time[t2_net_returns<0])),
                                 `No Treatment`=as.character(first(time[nt_net_returns<0]))) %>%
