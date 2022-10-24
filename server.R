@@ -50,6 +50,7 @@ shinyServer(function(input, output, session) {
   #Run simulations within reactive element
   start_year <- reactive(input$year_start)
   current_year <- reactive(start_year() + input$year - 1)
+  output_price <- reactive(input$output_price)
   
   tree_health_data <- reactive({
     simulateControlScenarios(
@@ -59,7 +60,7 @@ shinyServer(function(input, output, session) {
       disease_spread_rate = input$disease_spread_rate/100, # function expects a percentage (fraction)
       disease_growth_rate = input$disease_growth_rate/100,
       max_yield = input$max_yield/576, #may want to make the number of trees an input
-      output_price = input$output_price,
+      output_price = output_price(),
       annual_cost = input$annual_cost,
       replanting_strategy = input$replanting_strategy,
       replant_cost_tree = input$replant_cost_tree,
@@ -156,7 +157,7 @@ shinyServer(function(input, output, session) {
                       add_column(`Economic Result`="Yield (avg/ac/yr)",.before = 1),
                     #Row 2: net returns
                     tree_health_aggregated_yearly_cost_yield_and_returns %>%
-                      summarize(across(-c(time),~sum(.,na.rm = T))) %>%
+                      summarize(across(-c(time),~mean(.,na.rm = T))) %>%
                       mutate(across(everything(),~dollar(.,accuracy=1))) %>%
                       select(ends_with("net_returns")) %>%
                       rename(`Max Yield`=max_net_returns,`No Treatment`=nt_net_returns,`Treatment 1`=t1_net_returns,`Treatment 2`=t2_net_returns) %>%
@@ -164,8 +165,8 @@ shinyServer(function(input, output, session) {
                     #Row 3: benefit of treatment
                     tree_health_aggregated_yearly_cost_yield_and_returns %>%
                       summarize(across(-c(time),~sum(.,na.rm = T))) %>%
-                      mutate(t1_net_returns=t1_net_returns-nt_net_returns,
-                             t2_net_returns=t2_net_returns-nt_net_returns,
+                      mutate(t1_net_returns=(`Treatment 1`-`No Treatment`)*output_price(),
+                             t2_net_returns=(`Treatment 2`-`No Treatment`)*output_price(),
                              across(everything(),~dollar(.,accuracy=1))) %>%
                       select(ends_with("net_returns")) %>%
                       rename(`Max Yield`=max_net_returns,`No Treatment`=nt_net_returns,`Treatment 1`=t1_net_returns,`Treatment 2`=t2_net_returns) %>%

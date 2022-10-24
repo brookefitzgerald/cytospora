@@ -83,6 +83,7 @@ tree_sim <- function(o_rows=24, #Block dimension row
     
     #Grow trees subject to damage
     tree_shell[[t+1]] <- tree_shell[[t]] + grow_trees(age_shell[[t]]) - disease_shell[,,t]
+    tree_shell[[t+1]] <- pmax(zeros(o_rows, o_cols), tree_shell[[t+1]]) # set negative yields to zero
     
     #Propagate disease if disease spread has started
     if (t >= start_disease_year){
