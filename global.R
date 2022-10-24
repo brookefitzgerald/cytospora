@@ -7,8 +7,9 @@ tree_sim <- function(o_rows=24, #Block dimension row
                      replant_trees=FALSE, #Replant tree if the tree dies
                      replant_cost_tree=10, #Cost to replant an individual tree
                      start_disease_year=1, #Year infection starts in the orchard
-                     mature_year=5,  #Year tree reaches maturity
-                     tree_end=40,    #Productive life of tree
+                     tree_first_full_yield_year=5,  #Year tree reaches maturity
+                     tree_last_full_yield_year=30,  #Year tree starts declining in yield
+                     tree_end_year=40,    #Productive life of tree
                      max_yield=10,   #Yield at maturity
                      inf_starts=2,   #Number of infectious starts
                      disease_spread_rate=.10, #Rate of disease spread to adjacent trees in all directions (can be made more flexible)
@@ -29,9 +30,13 @@ tree_sim <- function(o_rows=24, #Block dimension row
   #There is an orchard of nxm trees.  
   orc_mat <- ones(o_rows, o_cols)
   
-  #Growth function - trees mature in y years and survive for yT years
-  growth_function <- approxfun(x=c(0,2,mature_year+1,tree_end),
-                               y=c(0,max_yield/mature_year,0,0),method = "constant")
+  #Growth function - trees mature at `tree_first_full_yield_year`, 
+  #                        start declining at `tree_last_full_yield_year`,
+  #                        survive until `tree_end_year`
+  growth_function <- approxfun(
+    x=c(0, 2, tree_first_full_yield_year+1, tree_last_full_yield_year+1, tree_end_year),
+    y=c(0, max_yield/tree_first_full_yield_year, 0, -max_yield/(tree_end_year-tree_last_full_yield_year+1), -max_yield/(tree_end_year-tree_last_full_yield_year+1)),
+    method = "constant")
   
   #Applies the growth function to a matrix of trees with arbitrary ages (e.g. from replanting)
   grow_trees <- function(tree_age_matrix) {
