@@ -165,8 +165,8 @@ shinyServer(function(input, output, session) {
                     #Row 3: benefit of treatment
                     tree_health_aggregated_orchard_cost_yield_and_returns %>%
                       summarize(across(-c(time),~sum(.,na.rm = T)), n_years=n()) %>%
-                      mutate(t1_net_returns=(`Treatment 1`-`No Treatment`)*output_price()/n_years,
-                             t2_net_returns=(`Treatment 2`-`No Treatment`)*output_price()/n_years,
+                      mutate(t1_net_returns=(t1_net_returns - nt_net_returns)/n_years,
+                             t2_net_returns=(t2_net_returns - nt_net_returns)/n_years,
                              across(everything(),~dollar(.,accuracy=1))) %>%
                       select(ends_with("net_returns")) %>%
                       rename(`Max Yield`=max_net_returns,`No Treatment`=nt_net_returns,`Treatment 1`=t1_net_returns,`Treatment 2`=t2_net_returns) %>%
