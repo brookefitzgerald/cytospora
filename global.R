@@ -37,17 +37,6 @@ tree_sim <- function(o_rows=24, #Block dimension row
   grow_trees <- function(tree_age_matrix) {
     matrix(growth_function(tree_age_matrix), ncol=o_cols, byrow=FALSE)
   }
-  # plot_time=c(1:40)
-  # tibble(x=plot_time,
-  #        growth=growth_function(plot_time),
-  #        cum_growth=cumsum(growth_function(plot_time))) %>%
-  #   add_case(x=0,growth=2,cum_growth=0) %>%
-  #   pivot_longer(-x) %>%
-  #   ggplot(aes(x,value,color=name)) +
-  #   geom_line() +
-  #   scale_x_continuous(breaks = plot_time) +
-  #   scale_y_continuous(breaks = c(0:max_yield))
-  
   
   #Seed infection 
   inf_mat <- zeros(o_rows, o_cols)
@@ -81,8 +70,8 @@ tree_sim <- function(o_rows=24, #Block dimension row
   
   #Costs
   cost_shell <- vector("numeric",TH)
-  cost_shell[[t]] <- annual_cost # the first year will not include costs of control, replanting, etc.
-  #TODO: figure out a clean way to calculate accurate costs for the first year
+  first_year_control_cost <- ifelse(control_effort>0, control_cost, 0.0)
+  cost_shell[[1]] <- annual_cost 
   
   ####################################
   for(t in 1:(TH-1)){
@@ -122,13 +111,13 @@ tree_sim <- function(o_rows=24, #Block dimension row
   
   tree_health <- pmap_df(list(tree_shell, c(1:TH), cost_shell),
                           function(tree, cntr, yearly_cost){
-                            bind_cols(expand_grid(x=c(1:o_cols),y=c(1:o_rows)),value=as.vector(tree)) %>%
+                            bind_cols(expand_grid(x=c(1:o_cols),y=c(1:o_rows)),yield=as.vector(tree)) %>%
                             add_column(
                               time=start_year + cntr - 1,
                               realized_costs=yearly_cost/numel(orc_mat),
                             )
                           }) %>%
-    mutate(net_returns=output_price*value - realized_costs)
+    mutate(net_returns=output_price*yield - realized_costs)
   
   return(tree_health)
 }
@@ -185,7 +174,7 @@ simulateControlScenarios <- function(year_start,
   inner_join(tree_health_nt,tree_health_max, by = c("x", "y", "time")) %>%
     inner_join(t1, by = c("x", "y", "time")) %>%
     inner_join(t2, by = c("x", "y", "time")) %>%
-    rename(`Max Yield`=max_value,`No Treatment`=nt_value,`Treatment 1`=t1_value,`Treatment 2`=t2_value)
+    rename(`Max Yield`=max_yield,`No Treatment`=nt_yield,`Treatment 1`=t1_yield,`Treatment 2`=t2_yield)
 }
 
 
