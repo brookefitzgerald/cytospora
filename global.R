@@ -37,17 +37,6 @@ tree_sim <- function(o_rows=24, #Block dimension row
   grow_trees <- function(tree_age_matrix) {
     matrix(growth_function(tree_age_matrix), ncol=o_cols, byrow=FALSE)
   }
-  # plot_time=c(1:40)
-  # tibble(x=plot_time,
-  #        growth=growth_function(plot_time),
-  #        cum_growth=cumsum(growth_function(plot_time))) %>%
-  #   add_case(x=0,growth=2,cum_growth=0) %>%
-  #   pivot_longer(-x) %>%
-  #   ggplot(aes(x,value,color=name)) +
-  #   geom_line() +
-  #   scale_x_continuous(breaks = plot_time) +
-  #   scale_y_continuous(breaks = c(0:max_yield))
-  
   
   #Seed infection 
   inf_mat <- zeros(o_rows, o_cols)
@@ -74,18 +63,27 @@ tree_sim <- function(o_rows=24, #Block dimension row
   disease_shell[,,1:(start_disease_year - 1)] <- 0 
   disease_shell[,,start_disease_year] <- inf_mat
 
-  #TreeAge
+  #Tree Age
   age_shell <- vector("list",TH)
   age_shell[[1]] <- orc_mat
   n_trees_replanted = 0
   
+  #Costs
+  cost_shell <- vector("numeric",TH)
+  first_year_control_cost <- ifelse(control_effort>0, control_cost, 0.0)
+  cost_shell[[1]] <- annual_cost 
+  
   ####################################
   for(t in 1:(TH-1)){
+    #Orchard costs money to run
+    cost_shell[[t+1]] <- annual_cost
+    
     #Trees age each year
     age_shell[[t+1]] <- age_shell[[t]] + 1
     
     #Grow trees subject to damage
     tree_shell[[t+1]] <- tree_shell[[t]] + grow_trees(age_shell[[t]]) - disease_shell[,,t]
+    tree_shell[[t+1]] <- pmax(zeros(o_rows, o_cols), tree_shell[[t+1]]) # set negative yields to zero
     
     #Propagate disease if disease spread has started
     if (t >= start_disease_year){
@@ -98,6 +96,7 @@ tree_sim <- function(o_rows=24, #Block dimension row
       if(control_effort>0){
         disease_shell[,,t+1] <- disease_shell[,,t+1]*(1-control_effort)
         disease_shell[,,t+1] <- pmax(zeros(o_rows, o_cols), disease_shell[,,t+1]) # sets any negatives to zero
+        cost_shell[[t+1]] <- cost_shell[[t+1]] + control_cost
       }
       
       #Replace dead trees if part of mitigation strategy
@@ -106,26 +105,20 @@ tree_sim <- function(o_rows=24, #Block dimension row
         age_shell[[t+1]][to_replant] <- 1.0 # Replanted tree is 1 year old
         tree_shell[[t+1]][to_replant] <- 1.0 # Replanted tree has initial yields
         disease_shell[,,t+1][to_replant] <- 0.0 # Replanted tree is healthy
-        n_trees_replanted <- n_trees_replanted + sum(to_replant)
+        cost_shell[[t+1]] <- cost_shell[[t+1]] + sum(to_replant)*replant_cost_tree # Number of trees replanted times their cost
       }
     }
   }
   
-  realized_costs <- annual_cost
-  if(control_effort>0){
-    realized_costs <- realized_costs + control_cost
-  }
-  if (n_trees_replanted>0){
-    # TODO: figure out why the replanting cost has such a huge impact 
-    realized_costs <- realized_costs + (n_trees_replanted*replant_cost_tree)
-  }
-  
-  tree_health <- map2_dfr(tree_shell,c(1:TH),
-                          function(tree,cntr){
-                            bind_cols(expand_grid(x=c(1:o_cols),y=c(1:o_rows)),value=as.vector(tree)) %>%
-                              add_column(time=start_year + cntr - 1)
+  tree_health <- pmap_df(list(tree_shell, c(1:TH), cost_shell),
+                          function(tree, cntr, yearly_cost){
+                            bind_cols(expand_grid(x=c(1:o_cols),y=c(1:o_rows)),yield=as.vector(tree)) %>%
+                            add_column(
+                              time=start_year + cntr - 1,
+                              realized_costs=yearly_cost/numel(orc_mat),
+                            )
                           }) %>%
-    mutate(net_returns=output_price*value - (realized_costs/numel(orc_mat)))
+    mutate(net_returns=output_price*yield - realized_costs)
   
   return(tree_health)
 }
@@ -182,7 +175,7 @@ simulateControlScenarios <- function(year_start,
   inner_join(tree_health_nt,tree_health_max, by = c("x", "y", "time")) %>%
     inner_join(t1, by = c("x", "y", "time")) %>%
     inner_join(t2, by = c("x", "y", "time")) %>%
-    rename(`Max Yield`=max_value,`No Treatment`=nt_value,`Treatment 1`=t1_value,`Treatment 2`=t2_value)
+    rename(`Max Yield`=max_yield,`No Treatment`=nt_yield,`Treatment 1`=t1_yield,`Treatment 2`=t2_yield)
 }
 
 
