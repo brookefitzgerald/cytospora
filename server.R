@@ -144,29 +144,29 @@ shinyServer(function(input, output, session) {
     })
 
     output$mytable <- DT::renderDataTable({
-      tree_health_aggregated_yearly_cost_yield_and_returns <- tree_health_data() %>%
+      tree_health_aggregated_orchard_cost_yield_and_returns <- tree_health_data() %>%
         group_by(time) %>%
         summarize(across(-c(x,y),~sum(.,na.rm = T))) %>%
         ungroup()
       DT::datatable(bind_rows(
                     #Row 1: yield
-                    tree_health_aggregated_yearly_cost_yield_and_returns %>%
+                    tree_health_aggregated_orchard_cost_yield_and_returns %>%
                       summarize(across(-c(time),~mean(.,na.rm = T))) %>%
                       mutate(across(everything(),~comma(.,accuracy=1))) %>%
                       select(`Max Yield`,`No Treatment`,`Treatment 1`,`Treatment 2`) %>%
                       add_column(`Economic Result`="Yield (avg/ac/yr)",.before = 1),
                     #Row 2: net returns
-                    tree_health_aggregated_yearly_cost_yield_and_returns %>%
+                    tree_health_aggregated_orchard_cost_yield_and_returns %>%
                       summarize(across(-c(time),~mean(.,na.rm = T))) %>%
                       mutate(across(everything(),~dollar(.,accuracy=1))) %>%
                       select(ends_with("net_returns")) %>%
                       rename(`Max Yield`=max_net_returns,`No Treatment`=nt_net_returns,`Treatment 1`=t1_net_returns,`Treatment 2`=t2_net_returns) %>%
                       add_column(`Economic Result`="Net Returns (avg/ac/yr)",.before = 1),
                     #Row 3: benefit of treatment
-                    tree_health_aggregated_yearly_cost_yield_and_returns %>%
-                      summarize(across(-c(time),~sum(.,na.rm = T))) %>%
-                      mutate(t1_net_returns=(`Treatment 1`-`No Treatment`)*output_price(),
-                             t2_net_returns=(`Treatment 2`-`No Treatment`)*output_price(),
+                    tree_health_aggregated_orchard_cost_yield_and_returns %>%
+                      summarize(across(-c(time),~sum(.,na.rm = T)), n_years=n()) %>%
+                      mutate(t1_net_returns=(`Treatment 1`-`No Treatment`)*output_price()/n_years,
+                             t2_net_returns=(`Treatment 2`-`No Treatment`)*output_price()/n_years,
                              across(everything(),~dollar(.,accuracy=1))) %>%
                       select(ends_with("net_returns")) %>%
                       rename(`Max Yield`=max_net_returns,`No Treatment`=nt_net_returns,`Treatment 1`=t1_net_returns,`Treatment 2`=t2_net_returns) %>%
@@ -174,7 +174,7 @@ shinyServer(function(input, output, session) {
                              `No Treatment`="") %>%
                       add_column(`Economic Result`="Treatment Returns (avg/ac/yr)",.before = 1),
                     #Row 4: operating duration
-                    tree_health_aggregated_yearly_cost_yield_and_returns %>%
+                    tree_health_aggregated_orchard_cost_yield_and_returns %>%
                       filter(time>start_year()+5) %>%
                       # chooses the first time the net returns were negative to replant entire orchard
                       summarise(`Treatment 1`=as.character(first(time[t1_net_returns<0])),
