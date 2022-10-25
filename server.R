@@ -49,13 +49,14 @@ shinyServer(function(input, output, session) {
 
   #Run simulations within reactive element
   start_year <- reactive(input$time_horizon[1])
+  end_year <- reactive(input$time_horizon[2])
   current_year <- reactive(start_year() + input$year - 1)
   output_price <- reactive(input$output_price)
   
   tree_health_data <- reactive({
     simulateControlScenarios(
       year_start = start_year(),
-      year_end = input$time_horizon[2],
+      year_end = end_year(),
       start_disease_year = input$start_disease_year,
       disease_spread_rate = input$disease_spread_rate/100, # function expects a percentage (fraction)
       disease_growth_rate = input$disease_growth_rate/100,
@@ -195,16 +196,16 @@ shinyServer(function(input, output, session) {
                       add_column(`Economic Result`="Net Present Value From Current Year ($/ac)", .before = 1),
                     #Row 5: operating duration
                     tree_health_aggregated_orchard_cost_yield_and_returns %>%
-                      filter(time>start_year()+5) %>%
+                      filter(time>start_year()+5 & time < start_year()+input$replant_year_orchard) %>%
                       # orders descending order so that the function cumsum sums starting from the end of the life of the orchard
                       arrange(desc(time)) %>%
-                      mutate(across(c(`Treatment 1`, `Treatment 2`, `No Treatment`), ~cumsum(.)*1.1, .names = "{.col}")) %>% # TODO: annualize
+                      mutate(across(c(`Treatment 1`, `Treatment 2`, `No Treatment`), ~cumsum(.)*input$output_price, .names = "{.col}")) %>% # TODO: annualize
                       # chooses the first time the expected profit from the net returns is outweighed by the replanted yield
                       summarise(`Treatment 1`=as.character(first(time[`Treatment 1` > replanted_yield_until_max])),
                                 `Treatment 2`=as.character(first(time[`Treatment 2` > replanted_yield_until_max])),
                                 `No Treatment`=as.character(first(time[`No Treatment` > replanted_yield_until_max]))) %>%
                       mutate(`Max Yield`="") %>%
-                      add_column(`Economic Result`="Optimal Replanting Year",.before = 1),
+                      add_column(`Economic Result`="Optimal First Replanting Year",.before = 1),
                     ),
                     options = list(dom = 't',
                                    columnDefs = list(
