@@ -14,7 +14,7 @@ grow_tree_function <- function(tree_ages,             #Matrix or vector of tree 
     y=c(0, max_yield/tree_first_full_yield_year, 0, -max_yield/(tree_end_year-tree_last_full_yield_year+1), -max_yield/(tree_end_year-tree_last_full_yield_year+1)),
     method = "constant")
   
-  # Gets the growth rate of trees with arbitrary ages (e.g. from replanting)
+  # Calculates the growth rate of trees with arbitrary ages (e.g. from replanting)
   tree_yield_growth <- growth_function(tree_ages)
   
   # If the trees are in a matrix, return a matrix with the same dimensions (by default approxfun flattens inputs to apply the function)
