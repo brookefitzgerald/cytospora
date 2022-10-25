@@ -10,8 +10,8 @@ grow_tree_function <- function(tree_ages,             #Matrix or vector of tree 
   #                        start declining at `tree_last_full_yield_year`,
   #                        survive until `tree_end_year`
   growth_function <- approxfun(
-    x=c(0, 2, tree_first_full_yield_year+1, tree_last_full_yield_year+1, tree_end_year),
-    y=c(0, max_yield/tree_first_full_yield_year, 0, -max_yield/(tree_end_year-tree_last_full_yield_year+1), -max_yield/(tree_end_year-tree_last_full_yield_year+1)),
+    x=c(0, 1, tree_first_full_yield_year+1, tree_last_full_yield_year, tree_last_full_yield_year+1, tree_end_year+1),
+    y=c(0, max_yield/tree_first_full_yield_year, 0, 0, -max_yield/(tree_end_year-tree_last_full_yield_year), -max_yield/(tree_end_year-tree_last_full_yield_year)),
     method = "constant")
   
   # Calculates the growth rate of trees with arbitrary ages (e.g. from replanting)
@@ -196,19 +196,3 @@ simulateControlScenarios <- function(year_start,
     inner_join(t2, by = c("x", "y", "time")) %>%
     rename(`Max Yield`=max_yield,`No Treatment`=nt_yield,`Treatment 1`=t1_yield,`Treatment 2`=t2_yield)
 }
-
-
-# tree_health_input=tree_yield
-# tree_econ <- function(
-    #     tree_health_input,
-#     output_price=30,
-#     annual_cost=10,
-#     treatment_1_cost=5,
-#     treatment_2_cost=2){
-#   
-#   #Expected net returns for a single grow (calculate daily for orchard, then sum at end)
-#   tree_health_input %>%
-#     mutate(across(-c(x,y,time),~output_price*. - annual_cost - ))
-#   
-#   
-# }
