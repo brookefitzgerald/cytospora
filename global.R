@@ -10,8 +10,8 @@ grow_tree_function <- function(tree_ages,             #Matrix or vector of tree 
   #                        start declining at `tree_last_full_yield_year`,
   #                        survive until `tree_end_year`
   growth_function <- approxfun(
-    x=c(0, 1, tree_first_full_yield_year+1, tree_last_full_yield_year, tree_last_full_yield_year+1, tree_end_year+1),
-    y=c(0, max_yield/tree_first_full_yield_year, 0, 0, -max_yield/(tree_end_year-tree_last_full_yield_year), -max_yield/(tree_end_year-tree_last_full_yield_year)),
+    x=c(0, 2, tree_first_full_yield_year+1, tree_last_full_yield_year+1, tree_end_year+1),
+    y=c(0, max_yield/(tree_first_full_yield_year+1), 0, -max_yield/(tree_end_year-tree_last_full_yield_year+3), 0),
     method = "constant")
   
   # Calculates the growth rate of trees with arbitrary ages (e.g. from replanting)
