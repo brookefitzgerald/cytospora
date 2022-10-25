@@ -3,8 +3,8 @@
 grow_tree_function <- function(tree_ages,             #Matrix or vector of tree ages
                        max_yield,                     #Yield at maturity
                        tree_first_full_yield_year=5,  #Year tree reaches maturity
-                       tree_last_full_yield_year=30,  #Year tree starts declining in yield
-                       tree_end_year=40){             #Productive life of tree
+                       tree_last_full_yield_year=15,  #Year tree starts declining in yield
+                       tree_end_year=20){             #Productive life of tree
   
   #Growth function - trees mature at `tree_first_full_yield_year`, 
   #                        start declining at `tree_last_full_yield_year`,
@@ -30,6 +30,9 @@ tree_sim <- function(o_rows=24, #Block dimension row
                      TH=40,     #Time Horizon
                      start_year=2022, #year simulation starts (only used to transform time at end)
                      replant_trees=FALSE, #Replant tree if the tree dies
+                     replant_orchard=TRUE, #Replant orchard at replant year
+                     replant_year=20,  # Year the orchard will be replanted
+                     replant_cost_orchard=3000, # Cost to replant the entire orchard
                      replant_cost_tree=10, #Cost to replant an individual tree
                      start_disease_year=1, #Year infection starts in the orchard
                      inf_starts=2,   #Number of infectious starts
@@ -112,11 +115,9 @@ tree_sim <- function(o_rows=24, #Block dimension row
       #if()
       
       #Disease is mitigated if present
-      if(control_effort>0){
-        disease_shell[,,t+1] <- disease_shell[,,t+1]*(1-control_effort)
-        disease_shell[,,t+1] <- pmax(zeros(o_rows, o_cols), disease_shell[,,t+1]) # sets any negatives to zero
-        cost_shell[[t+1]] <- cost_shell[[t+1]] + control_cost
-      }
+      disease_shell[,,t+1] <- disease_shell[,,t+1]*(1-control_effort)
+      disease_shell[,,t+1] <- pmax(zeros(o_rows, o_cols), disease_shell[,,t+1]) # sets any negatives to zero
+      cost_shell[[t+1]] <- cost_shell[[t+1]] + ifelse(control_effort==0, 0, control_cost)
       
       #Replace dead trees if part of mitigation strategy
       if(replant_trees==TRUE){
@@ -125,6 +126,16 @@ tree_sim <- function(o_rows=24, #Block dimension row
         tree_shell[[t+1]][to_replant] <- 1.0 # Replanted tree has initial yields
         disease_shell[,,t+1][to_replant] <- 0.0 # Replanted tree is healthy
         cost_shell[[t+1]] <- cost_shell[[t+1]] + sum(to_replant)*replant_cost_tree # Number of trees replanted times their cost
+      }
+      
+      # Replant orchard if part of mitigation strategy
+      if((replant_orchard==TRUE) & (t==replant_year)){
+        age_shell[[t+1]] <- 1 # Replanted tree is 1 year old
+        tree_shell[[t+1]] <- 1.0 # Replanted tree has initial yields
+        disease_shell[,,t+1] <- inf_mat # Replanted trees have initial disease starts.
+        cost_shell[[t+1]] <- cost_shell[[t+1]] + replant_cost_orchard
+        # control_effort <- 0 
+        # TODO: Figure out if disease should spread again/if control effort should continue. 
       }
     }
   }
@@ -150,6 +161,8 @@ simulateControlScenarios <- function(year_start,
                                      disease_growth_rate,
                                      replanting_strategy,
                                      replant_cost_tree,
+                                     replant_cost_orchard,
+                                     replant_year,
                                      max_yield,
                                      output_price,
                                      annual_cost,
@@ -161,13 +174,15 @@ simulateControlScenarios <- function(year_start,
   # set all of the same settings that are shared between simulations 
   time_horizon = year_end - year_start
   
-  
   tree_sim_with_shared_settings <- partial(tree_sim, 
                                            TH=time_horizon,
                                            start_year=year_start,
                                            start_disease_year=start_disease_year,
-                                           replant_trees=(replanting_strategy=='yr1_replant'),
+                                           replant_trees=(replanting_strategy=='tree_replant'),
+                                           replant_orchard=(replanting_strategy=='orchard_replant'),
+                                           replant_year=replant_year,
                                            replant_cost_tree=replant_cost_tree,
+                                           replant_cost_orchard=replant_cost_orchard,
                                            max_yield=max_yield,
                                            annual_cost=annual_cost,
                                            output_price=output_price,

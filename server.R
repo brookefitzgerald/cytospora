@@ -48,14 +48,14 @@ shinyServer(function(input, output, session) {
   )
 
   #Run simulations within reactive element
-  start_year <- reactive(input$year_start)
+  start_year <- reactive(input$time_horizon[1])
   current_year <- reactive(start_year() + input$year - 1)
   output_price <- reactive(input$output_price)
   
   tree_health_data <- reactive({
     simulateControlScenarios(
       year_start = start_year(),
-      year_end = input$year_end,
+      year_end = input$time_horizon[2],
       start_disease_year = input$start_disease_year,
       disease_spread_rate = input$disease_spread_rate/100, # function expects a percentage (fraction)
       disease_growth_rate = input$disease_growth_rate/100,
@@ -63,7 +63,9 @@ shinyServer(function(input, output, session) {
       output_price = output_price(),
       annual_cost = input$annual_cost,
       replanting_strategy = input$replanting_strategy,
+      replant_year = input$replant_year_orchard,
       replant_cost_tree = input$replant_cost_tree,
+      replant_cost_orchard = input$replant_cost_orchard,
       inf_intro = input$inf_intro,
       control1 = input$control1/100,
       t1_cost = input$t1_cost,

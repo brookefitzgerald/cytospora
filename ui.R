@@ -21,7 +21,7 @@ ui <- tabsetPanel(
     includeCSS(path = "static/css/styles.css"), 
     tags$div(
       class="landing_page_div",
-      tags$h1(class="landing_page_h1", "Cytospora Decision Support Tool"),
+      tags$h1(class="landing_page_h1", "Disease Decision Tool: Cytospora"),
       fluidRow(
         column(
           width=6,
@@ -29,7 +29,7 @@ ui <- tabsetPanel(
         ),
         column(
           width=6,
-          tags$p("Welcome to CSU's Cytospora Decision Support Tool. This tool is meant
+          tags$p("Welcome to CSU's Disease Decision Support Tool. This tool is meant
                to aid peach farmers understand the economic impact of the cytospora 
                disease and control strategies."),
         )
@@ -64,12 +64,11 @@ ui <- tabsetPanel(
                              min = 0,
                              max = 100,
                              value=10),
-                numericInput("year_start",
-                             "Planting Year",
-                             2022),
-                numericInput("year_end",
-                             "Planned Replanting Year",
-                             2062),
+                sliderInput("time_horizon", 
+                            "Years to Run Simulation",
+                            min = 2000, 
+                            max = 2100, 
+                            value = c(2022, 2062)),
                 numericInput("annual_cost",
                              "Annual Production Cost ($/ac/yr)",
                              value=5885),
@@ -79,10 +78,15 @@ ui <- tabsetPanel(
                 selectInput("replanting_strategy",
                              label = "Dead Tree Replanting Strategy", 
                              choices = list("Don't replant" = 'no_replant', 
-                                            "Replant dead trees every year" = 'yr1_replant'),
-                                            # "Replant dead trees every 5 years" = 'yr5_replant',
+                                            "Replant dead trees every year" = 'tree_replant',
+                                            "Replant orchard at planned replanting year" = 'orchard_replant'),
                                             # "Replant dead trees every 10 years" = 'yr10_replant'),
-                             selected = 'no_replant'),
+                             selected = 'orchard_replant'),
+                sliderInput("replant_year_orchard",
+                             "Planned Replanting Year",
+                             value=20,
+                             min=1,
+                             max=40),
                 numericInput("replant_cost_tree",
                              "Tree Replanting Cost",
                              10),
