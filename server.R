@@ -53,6 +53,8 @@ shinyServer(function(input, output, session) {
   current_year <- reactive(start_year() + input$year - 1)
   output_price <- reactive(input$output_price)
   
+  n_trees_in_orchard <- 576 # 24*24, number of trees planted in one acre
+  
   tree_health_data <- reactive({
     simulateControlScenarios(
       year_start = start_year(),
@@ -61,7 +63,7 @@ shinyServer(function(input, output, session) {
       t_treatment_year = input$start_treatment_year,
       disease_spread_rate = input$disease_spread_rate/100, # function expects a percentage (fraction)
       disease_growth_rate = input$disease_growth_rate/100,
-      max_yield = input$max_yield/576, #may want to make the number of trees an input
+      max_yield = input$max_yield/n_trees_in_orchard,
       output_price = output_price(),
       annual_cost = input$annual_cost,
       replanting_strategy = input$replanting_strategy,
@@ -190,6 +192,7 @@ shinyServer(function(input, output, session) {
                     tree_health_aggregated_orchard_cost_yield_and_returns %>%
                       select(c(time, ends_with("net_returns"))) %>%
                       filter(time >= current_year()) %>%
+                      # With a 3% discount rate
                       mutate(npv_multiplier=1/((1+0.03)**(time - current_year())),
                              across(ends_with("net_returns"), ~(.*npv_multiplier), .names = "{.col}")) %>% 
                       summarise(across(ends_with("net_returns"), ~dollar(sum(.),accuracy=1))) %>%

@@ -43,8 +43,8 @@ tree_sim <- function(o_rows=24, #Block dimension row
                      max_yield=15,   #Yield at maturity
                      disease_spread_rate=.10, #Rate of disease spread to adjacent trees in all directions (can be made more flexible)
                      disease_growth_rate=.2, #Rate of disease growth within a tree
-                     control_effort=0, #Rate of control effort applied per year
-                     control_cost=0, #Cost of the control applied
+                     control_effort=0.0, #Rate of control effort applied per year
+                     control_cost=0.0, #Cost of the control applied
                      output_price=30,  #Output price of product (peaches)
                      annual_cost=10,   #Annual production cost
                      sim_seed=25){
@@ -86,7 +86,7 @@ tree_sim <- function(o_rows=24, #Block dimension row
   disease_shell <- array(data = NA, dim=c(o_rows, o_cols, TH)) 
   # making disease shell an array to initialize when the disease starts ahead of time
   # keeping tree_shell and age_shell vectors because the access time of elements in vectors is higher than a slice of an array
-  disease_shell[,,1:(t_disease_year - 1)] <- 0 
+  disease_shell[,,1:(t_disease_year - 1)] <- 0
   disease_shell[,,t_disease_year] <- inf_mat
   
   #Tree Age
@@ -97,7 +97,7 @@ tree_sim <- function(o_rows=24, #Block dimension row
   #Costs
   cost_shell <- vector("numeric",TH)
   activated_control_effort <- control_effort
-  control_effort <- ifelse(t_treatment_year==1, activated_control_effort, 0.0)
+  control_effort <- ifelse(t_treatment_year==1, activated_control_effort, 0.0) # will check every year if treatment has started, otherwise 0
   first_year_control_cost <- ifelse(control_effort>0, control_cost, 0.0)
   cost_shell[[1]] <- annual_cost + first_year_control_cost
   
@@ -209,12 +209,14 @@ simulateControlScenarios <- function(year_start,
   
   #Simulate two control simulations
   #Treatment 1
-  t1 <- tree_sim_with_shared_settings(control_effort = control1,
+  t1 <- tree_sim_with_shared_settings(inf_starts = inf_intro,
+                                      control_effort = control1,
                                       control_cost = t1_cost) %>%
     rename_with(~str_c("t1_",.),-c(x,y,time))
   
   #Treatment 2
-  t2 <- tree_sim_with_shared_settings(control_effort = control2,
+  t2 <- tree_sim_with_shared_settings(inf_starts = inf_intro,
+                                      control_effort = control2,
                                       control_cost = t2_cost) %>%
     rename_with(~str_c("t2_",.),-c(x,y,time))
   
