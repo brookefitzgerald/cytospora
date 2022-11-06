@@ -1,15 +1,19 @@
 #Orchard simulation functions
 
+get_year_from_date <- function(date){
+  return(as.integer(format(date, "%Y")))
+}
+
 grow_tree_function <- function(tree_ages,             #Matrix or vector of tree ages
                        max_yield,                     #Yield at maturity
                        tree_first_full_yield_year=5,  #Year tree reaches maturity
-                       tree_end_year=20){             #Productive life of tree
+                       tree_end_year=40){             #Productive life of tree
   
   #Growth function - trees mature at `tree_first_full_yield_year`, 
   #                        survive until `tree_end_year`
   growth_function <- approxfun(
     x=c(0, 2, tree_first_full_yield_year+1, tree_end_year+1),
-    y=c(0, max_yield/(tree_first_full_yield_year+1), 0, 0),
+    y=c(0, max_yield/(tree_first_full_yield_year-1), 0, 0),
     method = "constant")
   
   # Calculates the growth rate of trees with arbitrary ages (e.g. from replanting)
@@ -22,6 +26,7 @@ grow_tree_function <- function(tree_ages,             #Matrix or vector of tree 
   
   return(tree_yield_growth)
 }
+
 
 tree_sim <- function(o_rows=24, #Block dimension row
                      o_cols=24, #Block dimension col
@@ -145,7 +150,9 @@ tree_sim <- function(o_rows=24, #Block dimension row
   
   tree_health <- pmap_df(list(tree_shell, c(1:TH), cost_shell),
                          function(tree, cntr, yearly_cost){
-                           bind_cols(expand_grid(x=c(1:o_cols),y=c(1:o_rows)),yield=as.vector(tree)) %>%
+                           # subtracting one from the yield so that the initial yield is truly 0
+                           # (non-zero yield is initially necessary for the growth function to work)
+                           bind_cols(expand_grid(x=c(1:o_cols),y=c(1:o_rows)),yield=as.vector(tree)-1) %>%
                              add_column(
                                time=start_year + cntr - 1,
                                realized_costs=yearly_cost/numel(orc_mat),
