@@ -3,15 +3,13 @@
 grow_tree_function <- function(tree_ages,             #Matrix or vector of tree ages
                        max_yield,                     #Yield at maturity
                        tree_first_full_yield_year=5,  #Year tree reaches maturity
-                       tree_last_full_yield_year=15,  #Year tree starts declining in yield
                        tree_end_year=20){             #Productive life of tree
   
   #Growth function - trees mature at `tree_first_full_yield_year`, 
-  #                        start declining at `tree_last_full_yield_year`,
   #                        survive until `tree_end_year`
   growth_function <- approxfun(
-    x=c(0, 2, tree_first_full_yield_year+1, tree_last_full_yield_year+1, tree_end_year+1),
-    y=c(0, max_yield/(tree_first_full_yield_year+1), 0, -max_yield/(tree_end_year-tree_last_full_yield_year+3), 0),
+    x=c(0, 2, tree_first_full_yield_year+1, tree_end_year+1),
+    y=c(0, max_yield/(tree_first_full_yield_year+1), 0, 0),
     method = "constant")
   
   # Calculates the growth rate of trees with arbitrary ages (e.g. from replanting)
@@ -34,7 +32,8 @@ tree_sim <- function(o_rows=24, #Block dimension row
                      replant_year=20,  # Year the orchard will be replanted
                      replant_cost_orchard=3000, # Cost to replant the entire orchard
                      replant_cost_tree=10, #Cost to replant an individual tree
-                     start_disease_year=1, #Year infection starts in the orchard
+                     t_disease_year=1, #Year infection starts in the orchard
+                     t_treatment_year=1, # Year the disease begins to be treated
                      inf_starts=2,   #Number of infectious starts
                      max_yield=15,   #Yield at maturity
                      disease_spread_rate=.10, #Rate of disease spread to adjacent trees in all directions (can be made more flexible)
@@ -82,8 +81,8 @@ tree_sim <- function(o_rows=24, #Block dimension row
   disease_shell <- array(data = NA, dim=c(o_rows, o_cols, TH)) 
   # making disease shell an array to initialize when the disease starts ahead of time
   # keeping tree_shell and age_shell vectors because the access time of elements in vectors is higher than a slice of an array
-  disease_shell[,,1:(start_disease_year - 1)] <- 0 
-  disease_shell[,,start_disease_year] <- inf_mat
+  disease_shell[,,1:(t_disease_year - 1)] <- 0 
+  disease_shell[,,t_disease_year] <- inf_mat
   
   #Tree Age
   age_shell <- vector("list",TH)
@@ -92,6 +91,8 @@ tree_sim <- function(o_rows=24, #Block dimension row
   
   #Costs
   cost_shell <- vector("numeric",TH)
+  activated_control_effort <- control_effort
+  control_effort <- ifelse(t_treatment_year==1, activated_control_effort, 0.0)
   first_year_control_cost <- ifelse(control_effort>0, control_cost, 0.0)
   cost_shell[[1]] <- annual_cost + first_year_control_cost
   
@@ -107,8 +108,10 @@ tree_sim <- function(o_rows=24, #Block dimension row
     tree_shell[[t+1]] <- tree_shell[[t]] + grow_trees(age_shell[[t]]) - disease_shell[,,t]
     tree_shell[[t+1]] <- pmax(zeros(o_rows, o_cols), tree_shell[[t+1]]) # set negative yields to zero
     
+    control_effort <- ifelse(t >= t_treatment_year, activated_control_effort, 0.0)
+    
     #Propagate disease if disease spread has started
-    if (t >= start_disease_year){
+    if (t >= t_disease_year){
       disease_shell[,,t+1] <- disease_shell[,,t]%*%(tmat_x + tmat_identity) + t(t(disease_shell[,,t])%*%tmat_y)
       
       #Disease is detected with some prob, and action is taken to curtail disease spread
@@ -117,7 +120,7 @@ tree_sim <- function(o_rows=24, #Block dimension row
       #Disease is mitigated if present
       disease_shell[,,t+1] <- disease_shell[,,t+1]*(1-control_effort)
       disease_shell[,,t+1] <- pmax(zeros(o_rows, o_cols), disease_shell[,,t+1]) # sets any negatives to zero
-      cost_shell[[t+1]] <- cost_shell[[t+1]] + ifelse(control_effort==0, 0, control_cost)
+      cost_shell[[t+1]] <- cost_shell[[t+1]] + ifelse(control_effort==0.0, 0, control_cost)
       
       #Replace dead trees if part of mitigation strategy
       if(replant_trees==TRUE){
@@ -156,7 +159,8 @@ tree_sim <- function(o_rows=24, #Block dimension row
 ## Function to run different disease control scenarios
 simulateControlScenarios <- function(year_start,
                                      year_end,
-                                     start_disease_year,
+                                     t_disease_year,
+                                     t_treatment_year,
                                      disease_spread_rate,
                                      disease_growth_rate,
                                      replanting_strategy,
@@ -177,7 +181,8 @@ simulateControlScenarios <- function(year_start,
   tree_sim_with_shared_settings <- partial(tree_sim, 
                                            TH=time_horizon,
                                            start_year=year_start,
-                                           start_disease_year=start_disease_year,
+                                           t_disease_year=t_disease_year,
+                                           t_treatment_year=t_treatment_year,
                                            replant_trees=(replanting_strategy=='tree_replant'),
                                            replant_orchard=(replanting_strategy=='orchard_replant'),
                                            replant_year=replant_year,

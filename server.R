@@ -57,7 +57,8 @@ shinyServer(function(input, output, session) {
     simulateControlScenarios(
       year_start = start_year(),
       year_end = end_year(),
-      start_disease_year = input$start_disease_year,
+      t_disease_year = input$start_disease_year,
+      t_treatment_year = input$start_treatment_year,
       disease_spread_rate = input$disease_spread_rate/100, # function expects a percentage (fraction)
       disease_growth_rate = input$disease_growth_rate/100,
       max_yield = input$max_yield/576, #may want to make the number of trees an input
