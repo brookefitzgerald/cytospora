@@ -8,6 +8,7 @@
 #
 
 library(shiny)
+library(plotly)
 library(DT)
 
 # Create UI for Landing page with CSU Branding
