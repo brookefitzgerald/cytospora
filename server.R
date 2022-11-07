@@ -11,6 +11,7 @@ library(shiny)
 library(tidyverse)
 library(scales)
 library(shinyjqui)
+library(plotly)
 #source("global.R")
 
 shinyServer(function(input, output, session) {
@@ -77,9 +78,10 @@ shinyServer(function(input, output, session) {
       t2_cost = input$t2_cost
     )})
   
-    output$orchard_health <- renderPlot({
+    output$orchard_health <- 
+      orchard_health_plot <- renderPlotly({
       #Raster blocks with color indicating disease spread
-      tree_health_data() %>%
+      ggplotly(tree_health_data() %>%
         dplyr::select(-ends_with(c("net_returns", "realized_costs"))) %>%
         dplyr::filter(time==current_year()) %>%
         mutate(across(-c(x,y,time),~./`Max Yield`)) %>%
@@ -94,57 +96,41 @@ shinyServer(function(input, output, session) {
         theme_bw(base_size = 15) +
         coord_equal() +
         labs(title = "Block Health") +
-        facet_wrap(~name,nrow = 1)
+        facet_wrap(~name,nrow = 1),
+        source='orchard_health') %>%
+        plotly::layout(xaxis = list(autorange = TRUE),
+                       yaxis = list(autorange = TRUE)) %>%
+        event_register("plotly_hover")
     })
-
-    output$tree_health <- renderPlot({
-
-      #Plot of individual tree growth
-      # tree_health() %>%
-      #   dplyr::filter(x==input$tree_col,y==input$tree_row) %>%
-      #   pivot_longer(-c(x,y,time)) %>%
-      #   ggplot(aes(x=time-1,y=value-1,color=name)) +
-      #   geom_line() +
-      #   geom_point() +
-      #   scale_y_continuous(breaks = seq(0,10,2),limits = c(0,12)) +
-      #   labs(x="Year",y="Yield",title="Tree Growth Path") +
-      #   theme_bw(base_size = 15) +
-      #   theme(legend.title = element_blank(),legend.position = "bottom")
+    
+    output$tree_health <- renderPlotly({
+      # if there is no hover data, render the overall orchard yield, 
+      # otherwise render the tree growth path  
+      hoverData <- event_data("plotly_hover", source = "orchard_health")
       
-      #Plot net present value
-      #tree_health()  %>%
-      #  group_by(time) %>%
-      #  summarize(across(-c(x,y),~sum(.,na.rm = T))) %>%
-      #  ungroup() %>% 
-      #  select(c(ends_with("net_returns"), time)) %>%
-      #  mutate(t=time-2022, .keep="unused") %>% 
-      #  arrange(t) %>% # start_year()) %>% #replaces year time column with time index column
-      #  mutate(across(-c(t),~cumsum(.)/(1+0.06)**t, .names="{.col}_npv")) %>%
-      #  pivot_longer(ends_with("_npv")) %>%
-      #  ggplot(aes(x=t-1, y=value-1, color=name)) +
-      #  geom_line() +
-      #  geom_point() +
-      #  scale_y_continuous(labels = label_comma()) +
-      #  ylim(-20000, 100000) +
-      #  labs(x="Year",y="Net present value",title="net present value") +
-      #  theme_bw(base_size = 15) +
-      #  theme(legend.title = element_blank(),legend.position = "bottom") 
-        
-
+      df <- tree_health_data() %>%
+        dplyr::select(-ends_with(c("net_returns", "realized_costs")))
+      if (!is.null(hoverData)) {
+        # Get individual tree yield
+        df <- df %>% filter(x==hoverData[["x"]] & y==hoverData[["y"]])
+        label <- "Block Yield of Tree over Time"
+      } else {
+        label <- "Block Yield Over Time"
+      }
       #Plot of block yield over time
-      tree_health_data() %>%
-        dplyr::select(-ends_with(c("net_returns", "realized_costs"))) %>%
-        group_by(time) %>%
-        summarize(across(-c(x,y),~sum(.,na.rm = T))) %>%
-        pivot_longer(-c(time)) %>%
-        ggplot(aes(x=time-1,y=value-1,color=name)) +
-        geom_line() +
-        geom_point() +
-        geom_vline(xintercept = current_year(),linetype="dashed") +
-        scale_y_continuous(labels = label_comma()) +
-        labs(x="Year",y="Yield",title="Block Yield Over Time") +
-        theme_bw(base_size = 15) +
-        theme(legend.title = element_blank(),legend.position = "bottom")  #Need to split legend over two rows
+      ggplotly(df %>%
+                 group_by(time) %>%
+                 summarize(across(-c(x,y),~sum(.,na.rm = T))) %>%
+                 pivot_longer(-c(time)) %>%
+                 ggplot(aes(x=time-1,y=value-1,color=name)) +
+                 geom_line() +
+                 geom_point() +
+                 geom_vline(xintercept = current_year(),linetype="dashed") +
+                 scale_y_continuous(labels = label_comma()) +
+                 labs(x="Year",y="Yield",title=label) +
+                 theme_bw(base_size = 15) +
+                 theme(legend.title = element_blank(),legend.position = "bottom")) %>%
+          layout(legend = list(orientation = 'h'))  #Need to split legend over two rows)
 
     })
 

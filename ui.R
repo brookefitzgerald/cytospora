@@ -110,7 +110,7 @@ ui <- tabsetPanel(
                 sliderInput("year",
                             "Year",
                             min = 1,
-                            max = 30,
+                            max = 40,
                             value = 15,
                             animate = TRUE),
                 sliderInput("start_disease_year",
@@ -142,9 +142,9 @@ ui <- tabsetPanel(
     
             # Show a plot of the generated distribution
             column(8,
-                plotOutput("orchard_health"),
+                plotlyOutput("orchard_health"),
                 fluidRow(
-                  column(6,plotOutput("tree_health")),
+                  column(6,plotlyOutput("tree_health")),
                   column(6,DT::dataTableOutput("mytable")))
                 )
              )
