@@ -48,22 +48,28 @@ shinyServer(function(input, output, session) {
   )
 
   #Run simulations within reactive element
-  start_year <- reactive(input$year_start)
+  start_year <- reactive(get_year_from_date(input$time_horizon[1]))
+  end_year <- reactive(get_year_from_date(input$time_horizon[2]))
   current_year <- reactive(start_year() + input$year - 1)
   output_price <- reactive(input$output_price)
+  
+  n_trees_in_orchard <- 576 # 24*24, number of trees planted in one acre
   
   tree_health_data <- reactive({
     simulateControlScenarios(
       year_start = start_year(),
-      year_end = input$year_end,
-      start_disease_year = input$start_disease_year,
+      year_end = end_year(),
+      t_disease_year = input$start_disease_year,
+      t_treatment_year = input$start_treatment_year,
       disease_spread_rate = input$disease_spread_rate/100, # function expects a percentage (fraction)
       disease_growth_rate = input$disease_growth_rate/100,
-      max_yield = input$max_yield/576, #may want to make the number of trees an input
+      max_yield = input$max_yield/n_trees_in_orchard,
       output_price = output_price(),
       annual_cost = input$annual_cost,
       replanting_strategy = input$replanting_strategy,
+      replant_year = input$replant_year_orchard,
       replant_cost_tree = input$replant_cost_tree,
+      replant_cost_orchard = input$replant_cost_orchard,
       inf_intro = input$inf_intro,
       control1 = input$control1/100,
       t1_cost = input$t1_cost,
@@ -125,7 +131,7 @@ shinyServer(function(input, output, session) {
       #  theme(legend.title = element_blank(),legend.position = "bottom") 
         
 
-      #Plot of block growth
+      #Plot of block yield over time
       tree_health_data() %>%
         dplyr::select(-ends_with(c("net_returns", "realized_costs"))) %>%
         group_by(time) %>%
@@ -150,12 +156,12 @@ shinyServer(function(input, output, session) {
         
       replanted_yield_until_max <- (tree_health_aggregated_orchard_cost_yield_and_returns %>%
         select(time, `Max Yield`) %>%
-        mutate(max_gross_returns= input$output_price*`Max Yield`) %>%
+        mutate(max_net_returns= input$output_price*`Max Yield`-input$annual_cost) %>%
         # add the initial cost of planting the orchard
-        add_row(time=start_year() - 1, max_gross_returns=-input$replant_cost_orchard) %>%
+        add_row(time=start_year() - 1, max_net_returns=-input$replant_cost_orchard) %>%
         # TODO: connect 5 and variable tree_first_full_yield_year in global.R
         filter(time <= start_year() + 5) %>% 
-        summarize(value=sum(max_gross_returns)))$value
+        summarize(value=sum(max_net_returns)))$value
       
       DT::datatable(bind_rows(
                     #Row 1: yield
@@ -186,6 +192,7 @@ shinyServer(function(input, output, session) {
                     tree_health_aggregated_orchard_cost_yield_and_returns %>%
                       select(c(time, ends_with("net_returns"))) %>%
                       filter(time >= current_year()) %>%
+                      # With a 3% discount rate
                       mutate(npv_multiplier=1/((1+0.03)**(time - current_year())),
                              across(ends_with("net_returns"), ~(.*npv_multiplier), .names = "{.col}")) %>% 
                       summarise(across(ends_with("net_returns"), ~dollar(sum(.),accuracy=1))) %>%
@@ -193,16 +200,16 @@ shinyServer(function(input, output, session) {
                       add_column(`Economic Result`="Net Present Value From Current Year ($/ac)", .before = 1),
                     #Row 5: operating duration
                     tree_health_aggregated_orchard_cost_yield_and_returns %>%
-                      filter(time>start_year()+5) %>%
+                      filter(time>start_year()+5 & time < start_year()+input$replant_year_orchard) %>%
                       # orders descending order so that the function cumsum sums starting from the end of the life of the orchard
                       arrange(desc(time)) %>%
-                      mutate(across(c(`Treatment 1`, `Treatment 2`, `No Treatment`), ~cumsum(.)*1.1, .names = "{.col}")) %>% # TODO: annualize
+                      mutate(across(c(`Treatment 1`, `Treatment 2`, `No Treatment`), ~cumsum(.)*input$output_price-input$annual_cost*n(), .names = "{.col}")) %>% # TODO: annualize
                       # chooses the first time the expected profit from the net returns is outweighed by the replanted yield
                       summarise(`Treatment 1`=as.character(first(time[`Treatment 1` > replanted_yield_until_max])),
                                 `Treatment 2`=as.character(first(time[`Treatment 2` > replanted_yield_until_max])),
                                 `No Treatment`=as.character(first(time[`No Treatment` > replanted_yield_until_max]))) %>%
                       mutate(`Max Yield`="") %>%
-                      add_column(`Economic Result`="Optimal Replanting Year",.before = 1),
+                      add_column(`Economic Result`="Optimal First Replanting Year",.before = 1),
                     ),
                     options = list(dom = 't',
                                    columnDefs = list(
