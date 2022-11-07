@@ -140,7 +140,8 @@ tree_sim <- function(o_rows=24, #Block dimension row
       if((replant_orchard==TRUE) & (t==replant_year)){
         age_shell[[t+1]] <- 1 # Replanted tree is 1 year old
         tree_shell[[t+1]] <- 1.0 # Replanted tree has initial yields
-        disease_shell[,,t+1] <- inf_mat # Replanted trees have initial disease starts.
+        shuffled_inf_mat <- matrix(sample(inf_mat), nrow=o_rows)
+        disease_shell[,,t+1] <- shuffled_inf_mat # Replanted trees have initial number of disease starts, but different places
         cost_shell[[t+1]] <- cost_shell[[t+1]] + replant_cost_orchard
         # control_effort <- 0 
         # TODO: Figure out if disease should spread again/if control effort should continue. 
