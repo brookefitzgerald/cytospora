@@ -107,30 +107,108 @@ shinyServer(function(input, output, session) {
       # if there is no hover data, render the overall orchard yield, 
       # otherwise render the tree growth path  
       hoverData <- event_data("plotly_hover", source = "orchard_health")
-      
-      df <- tree_health_data() %>%
-        dplyr::select(-ends_with(c("net_returns", "realized_costs")))
+      selected <- input$mytable_rows_selected
+      df <- tree_health_data()
+      if (!is.null(selected)) {
+        selected_row <- selected
+      } else {
+        selected_row <- -1
+      }
+      selected_net_returns <- (selected_row==2)
+      selected_return_to_treatment <- (selected_row==3)
+      selected_npv <- (selected_row==4)
       if (!is.null(hoverData)) {
         # Get individual tree yield
-        df <- df %>% filter(x==hoverData[["x"]] & y==hoverData[["y"]])
-        label <- "Block Yield of Tree over Time"
+        df <- df %>%
+          dplyr::select(-ends_with(c("net_returns", "realized_costs"))) %>%
+          filter(x==hoverData[["x"]] & y==hoverData[["y"]]) %>%
+          group_by(time) %>%
+          summarize(across(-c(x,y),~sum(.,na.rm = T))) %>%
+          pivot_longer(c(-time)) %>%
+          ggplot(aes(x=time,y=value,color=name)) +
+          geom_line() +
+          geom_point() +
+          geom_vline(xintercept = current_year(),linetype="dashed") +
+          geom_vline(xintercept = current_year(),linetype="dashed") +
+          scale_y_continuous(labels = label_comma()) +
+          labs(x="Year",y="Yield",title="Tree Yield Over Time") +
+          theme_bw(base_size = 15) +
+          theme(legend.title = element_blank(),legend.position = "bottom")
+      } else if (selected_net_returns){
+        df <- df %>% select(c(ends_with("net_returns"), time, x, y)) %>%
+          group_by(time) %>%
+          summarize(across(-c(x,y),~sum(.,na.rm = T))) %>%
+          ungroup() %>% 
+          rename(`Max Yield`=max_net_returns,`No Treatment`=nt_net_returns,`Treatment 1`=t1_net_returns,`Treatment 2`=t2_net_returns) %>%
+          pivot_longer(c(-time)) %>%
+          ggplot(aes(x=time, y=value, color=name)) +
+          geom_line() +
+          geom_point() +
+          geom_vline(xintercept = current_year(),linetype="dashed") +
+          scale_y_continuous(labels = label_comma()) +
+          labs(x="Year",y="Net returns",title="Net Returns Over Time") +
+          theme_bw(base_size = 15) +
+          theme(legend.title = element_blank(),legend.position = "bottom") 
+      }  else if (selected_return_to_treatment){
+        df <- df %>% 
+          select(c(ends_with("net_returns"), time, x, y)) %>%
+          group_by(time) %>%
+          summarize(across(-c(x,y),~sum(.,na.rm = T))) %>%
+          ungroup() %>%
+          mutate(t1_net_returns=(t1_net_returns - nt_net_returns),
+                 t2_net_returns=(t2_net_returns - nt_net_returns)) %>%
+                 #across(c(t1_net_returns, t2_net_returns), dollar(., accuracy=1))) %>%
+          select(c(t1_net_returns, t2_net_returns, time)) %>%
+          rename(`Treatment 1`=t1_net_returns,`Treatment 2`=t2_net_returns) %>%
+          pivot_longer(c(-time)) %>%
+          ggplot(aes(x=time, y=value, color=name)) +
+          geom_line() +
+          geom_point() +
+          geom_vline(xintercept = current_year(),linetype="dashed") +
+          scale_y_continuous(labels = label_comma()) +
+          labs(x="Year",y="Returns to Treatment",title="Returns to Treatment Over Time") +
+          theme_bw(base_size = 15) +
+          theme(legend.title = element_blank(),legend.position = "bottom") 
+      }  else if (selected_npv) {
+        df <- df %>% 
+          select(c(ends_with("net_returns"), time, x, y)) %>%
+          group_by(time) %>%
+          summarize(across(-c(x,y),~sum(.,na.rm = T))) %>%
+          ungroup() %>% 
+          mutate(t=time-start_year(), 
+                 npv_multiplier=((1+0.03)**-t)) %>% 
+          arrange(desc(t)) %>% 
+          mutate(across(-c(time, npv_multiplier, t),~cumsum(.*npv_multiplier), .names="{.col}_npv")) %>%
+          select(c(ends_with("_npv"), time)) %>%
+          rename(`Max Yield`=max_net_returns_npv,`No Treatment`=nt_net_returns_npv,`Treatment 1`=t1_net_returns_npv,`Treatment 2`=t2_net_returns_npv) %>%
+          pivot_longer(c(-time)) %>%
+          ggplot(aes(x=time, y=value, color=name)) +
+          geom_line() +
+          geom_point() +
+          geom_vline(xintercept = current_year(),linetype="dashed") +
+          scale_y_continuous(labels = label_comma()) +
+          labs(x="Year",y="Net present value",title="Net Present Value Over Time") +
+          theme_bw(base_size = 15) +
+          theme(legend.title = element_blank(),legend.position = "bottom") 
       } else {
-        label <- "Block Yield Over Time"
+        df <- df %>%
+          dplyr::select(-ends_with(c("net_returns", "realized_costs"))) %>%
+          group_by(time) %>%
+          summarize(across(-c(x,y),~sum(.,na.rm = T))) %>%
+          ungroup() %>%
+          pivot_longer(-c(time)) %>%
+          ggplot(aes(x=time,y=value,color=name)) +
+          geom_line() +
+          geom_point() +
+          geom_vline(xintercept = current_year(),linetype="dashed") +
+          scale_y_continuous(labels = label_comma()) +
+          labs(x="Year",y="Yield",title="Block Yield Over Time") +
+          theme_bw(base_size = 15) +
+          theme(legend.title = element_blank(),legend.position = "bottom")
       }
       #Plot of block yield over time
-      ggplotly(df %>%
-                 group_by(time) %>%
-                 summarize(across(-c(x,y),~sum(.,na.rm = T))) %>%
-                 pivot_longer(-c(time)) %>%
-                 ggplot(aes(x=time-1,y=value-1,color=name)) +
-                 geom_line() +
-                 geom_point() +
-                 geom_vline(xintercept = current_year(),linetype="dashed") +
-                 scale_y_continuous(labels = label_comma()) +
-                 labs(x="Year",y="Yield",title=label) +
-                 theme_bw(base_size = 15) +
-                 theme(legend.title = element_blank(),legend.position = "bottom")) %>%
-          layout(legend = list(orientation = 'h'))  #Need to split legend over two rows)
+      ggplotly(df)  %>%
+        layout(legend = list(orientation = 'h')) #Need to split legend over two rows)
 
     })
 
@@ -202,8 +280,11 @@ shinyServer(function(input, output, session) {
                                      list(width = '40px', targets = 0),
                                      list(width = '30px', targets = 1:4))
                                    ),
-                    rownames = FALSE)
+                    rownames = FALSE,
+                    selection = 'single')
     })
+    
+    
 
   
 })
