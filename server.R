@@ -16,17 +16,6 @@ library(glue)
 #source("global.R")
 
 shinyServer(function(input, output, session) {
-  # Hide untoggled panel elements
-  jqui_hide(ui="#disease_menu",    effect="blind")
-  jqui_hide(ui="#replanting_menu", effect="blind")
-  jqui_hide(ui="#treatments_menu", effect="blind")
-  
-  is_hidden_menu_list <- list(
-    disease=TRUE,
-    replanting=TRUE,
-    treatments=TRUE
-  )
-  
   # Hide dashboard by default
   jqui_hide(
     ui = "#div_dashboard", 
@@ -58,6 +47,66 @@ shinyServer(function(input, output, session) {
       height = "100%"),
     deleteFile=FALSE,
   )
+  
+  ##### Dynamically rendering the simulation options ########
+  # Initially untoggled panel elements
+  jqui_hide(ui="#disease_menu",    effect="blind")
+  jqui_hide(ui="#replanting_menu", effect="blind")
+  jqui_hide(ui="#treatments_menu", effect="blind")
+  
+  is_hidden_menu_list <- list(
+    disease=TRUE,
+    replanting=TRUE,
+    treatments=TRUE
+  )
+  
+  # Updates the class of the arrow icon to make it rotate when hidden. 
+  update_menu_arrow_icon_class <- function(id, is_hidden=TRUE){
+    if (is_hidden) {
+      jqui_add_class(glue("#{id}_menu_icon"), "hidden_menu_arrow")
+    } else {
+      jqui_remove_class(glue("#{id}_menu_icon"), "hidden_menu_arrow")
+    }
+  }
+  
+  # Toggles the disease menu options button
+  observeEvent(input$disease_menu_toggle, {
+    jqui_toggle('#disease_menu', effect = "blind")
+    is_hidden_menu_list[["disease"]] <- !is_hidden_menu_list[["disease"]]
+    update_menu_arrow_icon_class("disease", is_hidden_menu_list[["disease"]])
+  })
+  # Closes the menu with the close button
+  observeEvent(input$disease_menu_hide, {
+    jqui_hide('#disease_menu', effect = "blind")
+    is_hidden_menu_list[["disease"]] <- TRUE
+    update_menu_arrow_icon_class("disease", is_hidden_menu_list[["disease"]])
+  })
+  
+  # Toggles the replanting menu options
+  observeEvent(input$replanting_menu_toggle, {
+    jqui_toggle('#replanting_menu', effect = "blind")
+    is_hidden_menu_list[["replanting"]] <- !is_hidden_menu_list[["replanting"]]
+    update_menu_arrow_icon_class("replanting", is_hidden_menu_list[["replanting"]])
+  })
+  # Closes the menu with the close button
+  observeEvent(input$replanting_menu_hide, {
+    jqui_hide('#replanting_menu', effect = "blind")
+    is_hidden_menu_list[["replanting"]] <- TRUE
+    update_menu_arrow_icon_class("replanting", is_hidden_menu_list[["replanting"]])
+  })
+  
+  # Toggles the treatments menu options
+  observeEvent(input$treatments_menu_toggle, {
+    jqui_toggle('#treatments_menu', effect = "blind")
+    is_hidden_menu_list[["treatments"]] <- !is_hidden_menu_list[["treatments"]]
+    update_menu_arrow_icon_class("treatments", is_hidden_menu_list[["treatments"]])
+  })
+  # Closes the menu with the close button
+  observeEvent(input$treatments_menu_hide, {
+    jqui_hide('#treatments_menu', effect = "blind")
+    is_hidden_menu_list[["treatments"]] <- TRUE
+    update_menu_arrow_icon_class("treatments", is_hidden_menu_list[["treatments"]])
+  })
 
   #Run simulations within reactive element
   start_year <- reactive(get_year_from_date(input$time_horizon[1]))
@@ -220,53 +269,6 @@ shinyServer(function(input, output, session) {
       #Plot of block yield over time
       ggplotly(df)  %>%
         layout(legend = list(orientation = 'h')) #Need to split legend over two rows)
-    })
-    
-    #get_menu_button_id <- function(name, hide_or_toggle="hide"){
-    #  eval(substitute(expression(input$id), list(id=glue("{name}_menu_{hide_or_toggle}"))))[[1]]
-    #}
-    #
-    update_menu_arrow_icon_class <- function(id, is_hidden=TRUE){
-      if (is_hidden) {
-        jqui_add_class(glue("#{id}_menu_icon"), "hidden_menu_arrow")
-      } else {
-        jqui_remove_class(glue("#{id}_menu_icon"), "hidden_menu_arrow")
-      }
-    }
-    
-    observeEvent(input$disease_menu_toggle, {
-      jqui_toggle('#disease_menu', effect = "blind")
-      is_hidden_menu_list[["disease"]] <- !is_hidden_menu_list[["disease"]]
-      update_menu_arrow_icon_class("disease", is_hidden_menu_list[["disease"]])
-    })
-    
-    observeEvent(input$disease_menu_hide, {
-      jqui_hide('#disease_menu', effect = "blind")
-      is_hidden_menu_list[["disease"]] <- TRUE
-      update_menu_arrow_icon_class("disease", is_hidden_menu_list[["disease"]])
-    })
-    
-    observeEvent(input$replanting_menu_toggle, {
-      jqui_toggle('#replanting_menu', effect = "blind")
-      is_hidden_menu_list[["replanting"]] <- !is_hidden_menu_list[["replanting"]]
-      update_menu_arrow_icon_class("replanting", is_hidden_menu_list[["replanting"]])
-    })
-    
-    observeEvent(input$replanting_menu_hide, {
-      jqui_hide('#replanting_menu', effect = "blind")
-      is_hidden_menu_list[["replanting"]] <- TRUE
-      update_menu_arrow_icon_class("replanting", is_hidden_menu_list[["replanting"]])
-    })
-    observeEvent(input$treatments_menu_toggle, {
-      jqui_toggle('#treatments_menu', effect = "blind")
-      is_hidden_menu_list[["treatments"]] <- !is_hidden_menu_list[["treatments"]]
-      update_menu_arrow_icon_class("treatments", is_hidden_menu_list[["treatments"]])
-    })
-    
-    observeEvent(input$treatments_menu_hide, {
-      jqui_hide('#treatments_menu', effect = "blind")
-      is_hidden_menu_list[["treatments"]] <- TRUE
-      update_menu_arrow_icon_class("treatments", is_hidden_menu_list[["treatments"]])
     })
     
     output$mytable <- DT::renderDataTable({
