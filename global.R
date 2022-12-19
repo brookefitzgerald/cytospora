@@ -111,8 +111,7 @@ tree_sim <- function(o_rows=24, #Block dimension row
     
     #Grow trees subject to damage
     tree_shell[[t+1]] <- tree_shell[[t]] + grow_trees(age_shell[[t]]) - disease_shell[,,t]
-    tree_shell[[t+1]] <- pmax(zeros(o_rows, o_cols), tree_shell[[t+1]]) # set negative yields to zero
-    
+    tree_shell[[t+1]] <- pmax(ones(o_rows, o_cols), tree_shell[[t+1]]) # set negative yields to zero
     control_effort <- ifelse(t >= t_treatment_year, activated_control_effort, 0.0)
     
     #Propagate disease if disease spread has started
@@ -147,6 +146,7 @@ tree_sim <- function(o_rows=24, #Block dimension row
         # TODO: Figure out if disease should spread again/if control effort should continue. 
       }
     }
+    tree_shell[[t+1]] <- pmax(zeros(o_rows, o_cols), tree_shell[[t+1]]) # set negative yields to zero
   }
   
   tree_health <- pmap_df(list(tree_shell, c(1:TH), cost_shell),

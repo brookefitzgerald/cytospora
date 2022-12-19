@@ -12,15 +12,26 @@ library(tidyverse)
 library(scales)
 library(shinyjqui)
 library(plotly)
+library(glue)
 #source("global.R")
 
 shinyServer(function(input, output, session) {
+  # Hide untoggled panel elements
+  jqui_hide(ui="#disease_menu",    effect="blind")
+  jqui_hide(ui="#replanting_menu", effect="blind")
+  jqui_hide(ui="#treatments_menu", effect="blind")
+  
+  is_hidden_menu_list <- list(
+    disease=TRUE,
+    replanting=TRUE,
+    treatments=TRUE
+  )
+  
   # Hide dashboard by default
   jqui_hide(
     ui = "#div_dashboard", 
     effect = "blind"
   )
-  
   observeEvent(input$go_to_app, {
     # if user has clicked away from landing page:
     # first switch to tab `dashboard`:
@@ -41,7 +52,7 @@ shinyServer(function(input, output, session) {
   output$logo <- renderImage(
     expr=list(
       class= "center",
-      src = "static/images/logo.png",
+      src = "www/images/logo.png",
       contentType = "image/png",
       alt = "CSU Logo",
       height = "100%"),
@@ -209,15 +220,61 @@ shinyServer(function(input, output, session) {
       #Plot of block yield over time
       ggplotly(df)  %>%
         layout(legend = list(orientation = 'h')) #Need to split legend over two rows)
-
     })
-
+    
+    #get_menu_button_id <- function(name, hide_or_toggle="hide"){
+    #  eval(substitute(expression(input$id), list(id=glue("{name}_menu_{hide_or_toggle}"))))[[1]]
+    #}
+    #
+    update_menu_arrow_icon_class <- function(id, is_hidden=TRUE){
+      if (is_hidden) {
+        jqui_add_class(glue("#{id}_menu_icon"), "hidden_menu_arrow")
+      } else {
+        jqui_remove_class(glue("#{id}_menu_icon"), "hidden_menu_arrow")
+      }
+    }
+    
+    observeEvent(input$disease_menu_toggle, {
+      jqui_toggle('#disease_menu', effect = "blind")
+      is_hidden_menu_list[["disease"]] <- !is_hidden_menu_list[["disease"]]
+      update_menu_arrow_icon_class("disease", is_hidden_menu_list[["disease"]])
+    })
+    
+    observeEvent(input$disease_menu_hide, {
+      jqui_hide('#disease_menu', effect = "blind")
+      is_hidden_menu_list[["disease"]] <- TRUE
+      update_menu_arrow_icon_class("disease", is_hidden_menu_list[["disease"]])
+    })
+    
+    observeEvent(input$replanting_menu_toggle, {
+      jqui_toggle('#replanting_menu', effect = "blind")
+      is_hidden_menu_list[["replanting"]] <- !is_hidden_menu_list[["replanting"]]
+      update_menu_arrow_icon_class("replanting", is_hidden_menu_list[["replanting"]])
+    })
+    
+    observeEvent(input$replanting_menu_hide, {
+      jqui_hide('#replanting_menu', effect = "blind")
+      is_hidden_menu_list[["replanting"]] <- TRUE
+      update_menu_arrow_icon_class("replanting", is_hidden_menu_list[["replanting"]])
+    })
+    observeEvent(input$treatments_menu_toggle, {
+      jqui_toggle('#treatments_menu', effect = "blind")
+      is_hidden_menu_list[["treatments"]] <- !is_hidden_menu_list[["treatments"]]
+      update_menu_arrow_icon_class("treatments", is_hidden_menu_list[["treatments"]])
+    })
+    
+    observeEvent(input$treatments_menu_hide, {
+      jqui_hide('#treatments_menu', effect = "blind")
+      is_hidden_menu_list[["treatments"]] <- TRUE
+      update_menu_arrow_icon_class("treatments", is_hidden_menu_list[["treatments"]])
+    })
+    
     output$mytable <- DT::renderDataTable({
       tree_health_aggregated_orchard_cost_yield_and_returns <- tree_health_data() %>%
         group_by(time) %>%
         summarize(across(-c(x,y),~sum(.,na.rm = T))) %>%
         ungroup()
-        
+
       replanted_yield_until_max <- (tree_health_aggregated_orchard_cost_yield_and_returns %>%
         select(time, `Max Yield`) %>%
         mutate(max_net_returns= input$output_price*`Max Yield`-input$annual_cost) %>%
@@ -271,7 +328,8 @@ shinyServer(function(input, output, session) {
                       # chooses the first time the expected profit from the net returns is outweighed by the replanted yield
                       summarise(`Treatment 1`=as.character(first(time[`Treatment 1` > replanted_yield_until_max])),
                                 `Treatment 2`=as.character(first(time[`Treatment 2` > replanted_yield_until_max])),
-                                `No Treatment`=as.character(first(time[`No Treatment` > replanted_yield_until_max]))) %>%
+                                `No Treatment`=as.character(first(time[`No Treatment` > replanted_yield_until_max])),
+                                `Max Yield`=as.character(first(time[`Max Yield` > replanted_yield_until_max]))) %>%
                       mutate(`Max Yield`="") %>%
                       add_column(`Economic Result`="Optimal First Replanting Year",.before = 1),
                     ),
