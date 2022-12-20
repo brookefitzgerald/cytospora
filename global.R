@@ -137,7 +137,7 @@ tree_sim <- function(o_rows=24, #Block dimension row
       
       # Replant orchard if part of mitigation strategy
       if((replant_orchard==TRUE) & (t==replant_year)){
-        age_shell[[t+1]] <- 1 # Replanted tree is 1 year old
+        age_shell[[t+1]] <- 1.0 # Replanted tree is 1 year old
         tree_shell[[t+1]] <- 1.0 # Replanted tree has initial yields
         shuffled_inf_mat <- matrix(sample(inf_mat), nrow=o_rows)
         disease_shell[,,t+1] <- shuffled_inf_mat # Replanted trees have initial number of disease starts, but different places

@@ -13,9 +13,15 @@ library(scales)
 library(shinyjqui)
 library(plotly)
 library(glue)
-#source("global.R")
+source("ui.R")
 
 shinyServer(function(input, output, session) {
+  
+  output$annual_cost_res <- renderUI(
+    numericInput("annual_cost",
+                 infoHoverLabel("Annual Production Cost ($/ac/yr)","Annual Production Cost ($/ac/yr)"),
+                 value = input$annual_cost_1+input$annual_cost_2)
+  )
   # Hide dashboard by default
   jqui_hide(
     ui = "#div_dashboard", 
@@ -72,7 +78,7 @@ shinyServer(function(input, output, session) {
   # Toggles the disease menu options button
   observeEvent(input$disease_menu_toggle, {
     jqui_toggle('#disease_menu', effect = "blind")
-    is_hidden_menu_list[["disease"]] <- !is_hidden_menu_list[["disease"]]
+    is_hidden_menu_list[["disease"]] <<- !is_hidden_menu_list[["disease"]]
     update_menu_arrow_icon_class("disease", is_hidden_menu_list[["disease"]])
   })
   # Closes the menu with the close button
@@ -85,7 +91,7 @@ shinyServer(function(input, output, session) {
   # Toggles the replanting menu options
   observeEvent(input$replanting_menu_toggle, {
     jqui_toggle('#replanting_menu', effect = "blind")
-    is_hidden_menu_list[["replanting"]] <- !is_hidden_menu_list[["replanting"]]
+    is_hidden_menu_list[["replanting"]] <<- !is_hidden_menu_list[["replanting"]]
     update_menu_arrow_icon_class("replanting", is_hidden_menu_list[["replanting"]])
   })
   # Closes the menu with the close button
@@ -98,7 +104,7 @@ shinyServer(function(input, output, session) {
   # Toggles the treatments menu options
   observeEvent(input$treatments_menu_toggle, {
     jqui_toggle('#treatments_menu', effect = "blind")
-    is_hidden_menu_list[["treatments"]] <- !is_hidden_menu_list[["treatments"]]
+    is_hidden_menu_list[["treatments"]] <<- !is_hidden_menu_list[["treatments"]]
     update_menu_arrow_icon_class("treatments", is_hidden_menu_list[["treatments"]])
   })
   # Closes the menu with the close button
@@ -107,7 +113,9 @@ shinyServer(function(input, output, session) {
     is_hidden_menu_list[["treatments"]] <- TRUE
     update_menu_arrow_icon_class("treatments", is_hidden_menu_list[["treatments"]])
   })
-
+  
+  
+  
   #Run simulations within reactive element
   start_year <- reactive(get_year_from_date(input$time_horizon[1]))
   end_year <- reactive(get_year_from_date(input$time_horizon[2]))
@@ -138,30 +146,31 @@ shinyServer(function(input, output, session) {
       t2_cost = input$t2_cost
     )})
   
-    output$orchard_health <- 
-      orchard_health_plot <- renderPlotly({
+    output$orchard_health <- renderPlotly({
       #Raster blocks with color indicating disease spread
-      ggplotly(tree_health_data() %>%
+      gg <- tree_health_data() %>%
         dplyr::select(-ends_with(c("net_returns", "realized_costs"))) %>%
         dplyr::filter(time==current_year()) %>%
-        mutate(across(-c(x,y,time),~./`Max Yield`)) %>%
+        #When the yield is all zero, the heatmap turns grey. I add a tiny amount of noise to keep it green.
+        mutate(across(-c(x,y,time),~ifelse(`Max Yield`>0, ./`Max Yield`, 1-runif(n(),max=1e-10)))) %>%
         dplyr::select(-`Max Yield`) %>%
         pivot_longer(-c(x,y,time)) %>%
-        mutate(yield=ifelse(value<0,0,value)) %>%
-        ggplot(aes(x=x,y=y,fill=yield)) +
+        mutate(yield=ifelse(value<0,0,value))
+        
+      gg2 <<- gg %>% ggplot(aes(x=x,y=y,fill=yield)) +
         geom_tile(size=.1,show.legend = F) +
         scale_fill_gradient(name="Tree Health",low = "red", high = "green",limit=c(0,1)) +
-        scale_x_continuous(name = "Column",breaks = seq.int(1,24,2),minor_breaks = NULL) +
-        scale_y_continuous(name = "Row",breaks = seq.int(1,24,2),minor_breaks = NULL) +
+        scale_x_continuous(name = "Column")+#,breaks = seq.int(1,24,2),minor_breaks = NULL) +
+        scale_y_continuous(name = "Row")+#,breaks = seq.int(1,24,2),minor_breaks = NULL) +
         theme_bw(base_size = 15) +
-        coord_equal() +
+        #coord_equal() +
         labs(title = "Block Health") +
-        facet_wrap(~name,nrow = 1),
-        source='orchard_health') %>%
-        plotly::layout(xaxis = list(autorange = TRUE),
-                       yaxis = list(autorange = TRUE)) %>%
+        facet_wrap(~name,nrow = 1)
+      fig <- ggplotly(gg2, source='orchard_health') %>%
+        plotly::layout(xaxis = list(label="column"),
+                       yaxis = list(constrain="domain", constraintoward='top', label="row")) %>%
         event_register("plotly_hover")
-    })
+      })
     
     output$tree_health <- renderPlotly({
       # if there is no hover data, render the overall orchard yield, 

@@ -8,16 +8,17 @@
 #
 
 library(shiny)
+library(shinyWidgets)
 library(plotly)
 library(DT)
 
 infoHoverLabel<- function(label, info_text=""){
-  return(HTML(paste("<div><text>", label, "</text>", icon("circle-info", title=info_text), "</div>")))
+  return(shiny::HTML(paste("<div><text>", label, "</text>", shiny::icon("circle-info", title=info_text), "</div>")))
 }
 menuIconLabel <- function(label, id_prefix){
-  return(HTML(
+  return(shiny::HTML(
     paste("<div><text>", label, "</text>", 
-            icon("chevron-down", id=paste0(id_prefix, "_menu_icon"), class="hidden_menu_arrow"),
+            shiny::icon("chevron-down", id=paste0(id_prefix, "_menu_icon"), class="hidden_menu_arrow"),
           "</div>")
       )
     )
@@ -72,31 +73,52 @@ ui <- tabsetPanel(
         # Sidebar with a slider input for number of bins
         fluidRow(
             column(2,
+                tags$div(
+                  uiOutput('annual_cost_res'),
+                              dropdownButton(
+                                tags$h3("Production Cost Inputs"),
+                                numericInput("annual_cost_1",
+                                             infoHoverLabel("Labor Cost ($/ac/yr)",
+                                                            "Labor Cost ($/ac/yr)"),
+                                             value=4885),
+                                numericInput("annual_cost_2",
+                                             infoHoverLabel("Water Cost ($/ac/yr)",
+                                                            "Water Cost ($/ac/yr)"),
+                                             value=1000),
+                                circle = TRUE,
+                                status = "primary", 
+                                icon = icon("gear"), 
+                                size='sm',
+                                width = "300px",
+                                tooltip = tooltipOptions(title = "Click for help with budgeting production cost")
+                              ),
+                            ),
                  numericInput("max_yield",
                               infoHoverLabel("Mature Disease-Free Yield lbs/ac/year",
                                              "Mature Disease-Free Yield lbs/ac/year"),
                               13000),
-                 numericInput("annual_cost",
-                              "Annual Production Cost ($/ac/yr)",
-                              value=5885),
                  numericInput("output_price",
-                              "Peach Price ($/lb)",
+                              infoHoverLabel("Peach Price ($/lb)",
+                                             "Peach Price ($/lb)"),
                               value=1.1),
                  actionButton("disease_menu_toggle", menuIconLabel("Disease Settings", id_prefix="disease"), class="menu"),
                  tags$div(
                    id="disease_menu",
                    numericInput("inf_intro",
-                                "Infectious Introductions",
+                                infoHoverLabel("Infectious Introductions",
+                                               "Infectious Introductions"),
                                 min = 0,
                                 max = 100,
                                 value=10),
                    sliderInput("disease_spread_rate",
-                               "Rate of Disease Spread Between Trees (%)",
+                               infoHoverLabel("Rate of Disease Spread Between Trees (%)",
+                                              "Rate of Disease Spread Between Trees (%)"),
                                min = 0,
                                max = 100,
                                value=10),
                    sliderInput("disease_growth_rate",
-                               "Rate of Disease Growth Within a Tree (%)",
+                               infoHoverLabel("Rate of Disease Growth Within a Tree (%)",
+                                              "Rate of Disease Growth Within a Tree (%)"),
                                min = 0,
                                max = 100,
                                value=20),
@@ -108,22 +130,26 @@ ui <- tabsetPanel(
                  tags$div(
                    id="replanting_menu",
                    selectInput("replanting_strategy",
-                               label = "Dead Tree Replanting Strategy", 
+                               label=infoHoverLabel("Dead Tree Replanting Strategy",
+                                                    "Dead Tree Replanting Strategy"), 
                                choices = list("Don't replant" = 'no_replant', 
                                               "Replant dead trees every year" = 'tree_replant',
                                               "Replant orchard at planned replanting year" = 'orchard_replant'),
                                # "Replant dead trees every 10 years" = 'yr10_replant'),
                                selected = 'orchard_replant'),
                    sliderInput("replant_year_orchard",
-                               "Planned Replanting Year",
+                               infoHoverLabel("Planned Replanting Year",
+                                              "Planned Replanting Year"),
                                value=20,
                                min=1,
                                max=40),
                    numericInput("replant_cost_tree",
-                                "Tree Replanting Cost",
+                                infoHoverLabel("Tree Replanting Cost",
+                                               "Tree Replanting Cost"),
                                 10),
                    numericInput("replant_cost_orchard",
-                                "Orchard Replanting Cost",
+                                infoHoverLabel("Orchard Replanting Cost",
+                                               "Orchard Replanting Cost"),
                                 5500),
                    actionButton("replanting_menu_hide", "Close menu"),
                  ),
@@ -133,45 +159,52 @@ ui <- tabsetPanel(
                  tags$div(
                    id="treatments_menu",
                    sliderInput("control1",
-                               "Treatment 1 Spread Reduction (%)",
+                               infoHoverLabel("Treatment 1 Spread Reduction (%)",
+                                              "Treatment 1 Spread Reduction (%)"),
                                min = 0,
                                max = 100,
                                value=10),
                    numericInput("t1_cost",
-                                "Treatment 1 Cost ($/ac/yr)",
+                                infoHoverLabel("Treatment 1 Cost ($/ac/yr)",
+                                               "Treatment 1 Cost ($/ac/yr)"),
                                 value=350),
                    sliderInput("control2",
-                               "Treatment 2 Spread Reduction (%)",
+                               infoHoverLabel("Treatment 2 Spread Reduction (%)",
+                                              "Treatment 2 Spread Reduction (%)"),
                                min = 0,
                                max = 100,
                                value=20),
                    numericInput("t2_cost",
-                                "Treatment 2 Cost ($/ac/yr)",
+                                infoHoverLabel("Treatment 2 Cost ($/ac/yr)",
+                                               "Treatment 2 Cost ($/ac/yr)"),
                                 value=650),
                    actionButton("treatments_menu_hide", "Close menu"),
                  )
             ),
             column(2,
                sliderInput("time_horizon", 
-                           "Years to Run Simulation",
+                           infoHoverLabel("Years to Run Simulation",
+                                          "Years to Run Simulation"),
                            min = as.Date('2000-01-01'), 
                            max = as.Date('2100-01-01'), 
                            value = c(as.Date('2022-01-01'), as.Date('2062-01-01')),
                            timeFormat = '%Y'),
                 sliderInput("year",
-                            "Year",
+                            infoHoverLabel("Year",
+                                           "Year"),
                             min = 1,
                             max = 40,
                             value = 15,
                             animate = TRUE),
-                verbatimTextOutput("isOpen"),
                 sliderInput("start_disease_year",
-                            "Year Disease Starts",
+                            infoHoverLabel("Year Disease Starts",
+                                           "Year Disease Starts"),
                             min = 1,
                             max = 30,
                             value = 1),
                 sliderInput("start_treatment_year",
-                            "Year Treatment Starts",
+                            infoHoverLabel("Year Treatment Starts",
+                                           "Year Treatment Starts"),
                             min = 1,
                             max = 30,
                             value = 1)
@@ -179,7 +212,7 @@ ui <- tabsetPanel(
     
             # Show a plot of the generated distribution
             column(8,
-                plotlyOutput("orchard_health"),
+                plotlyOutput("orchard_health", height="350px"),
                 fluidRow(
                   column(6,plotlyOutput("tree_health")),
                   column(6,DT::dataTableOutput("mytable")))
