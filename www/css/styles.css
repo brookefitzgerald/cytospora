@@ -48,10 +48,10 @@ p {
   transform : rotate(270deg);
 }
 
-/*In order to have the annual cost be editable both from the dropdown helper 
-menu and as an input on its own, the input is created in server.R (not ui.R like
-all the other inputs). This causes an error as the rest of the code attempts to 
-access the value of annual cost though it has not yet been initialized.
+/*In order to update the year slider min/maxes via the time horizon slider bounds,
+the input is created in server.R (not ui.R like all the other inputs). This 
+causes an error as the rest of the code attempts to access the value of time years
+though they have not yet been initialized.
 The CSS below hides the temporary error from this process (and all other errors, 
 should be commented out during development). */
 

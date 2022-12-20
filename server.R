@@ -16,13 +16,17 @@ library(glue)
 source("ui.R")
 
 shinyServer(function(input, output, session) {
-  # Only input that is also updated by other inputs e.g. sum(annual_cost_{n})
-  output$annual_cost_res <- renderUI(
-    numericInput("annual_cost",
-                 # Using infoHoverLabel from ui.R to add an informational tooltip
-                 infoHoverLabel("Annual Production Cost ($/ac/yr)"),
-                 value = input$annual_cost_1+input$annual_cost_2)
-  )
+  #  First input that is also updated by other inputs e.g. sum(annual_cost_{n})
+  updateTotalAnnualCost <- function(input_name){
+    observeEvent(input[[input_name]], {
+      updateTextInput("annual_cost", 
+                      value=input$annual_cost_1+input$annual_cost_2, 
+                      session=session)
+    })
+  }
+  updateTotalAnnualCost('annual_cost_1')
+  updateTotalAnnualCost('annual_cost_2')
+  
   # Hide dashboard by default
   jqui_hide(
     ui = "#div_dashboard", 
@@ -101,28 +105,59 @@ shinyServer(function(input, output, session) {
   toggle_menu_options('treatments')
   toggle_menu_close('treatments')
   
+  # Update year slider ranges conditional on time horizon
+  keep_year_proportion <- function(old_value, old_start, old_end, start, end){
+    old_proportion <- (old_value-old_start)/(old_end-old_start)
+    #solve (ov-os)/(oe-os)=(v-s)/(e-s) for v:
+    value <- round(old_proportion*(end - start) + start)
+    return(value)
+  }
   
-  #Run simulations within reactive element
-  start_year <- reactive(get_year_from_date(input$time_horizon[1]))
-  end_year <- reactive(get_year_from_date(input$time_horizon[2]))
-  current_year <- reactive(start_year() + input$year - 1)
+  updateYearSliderInput <- function(name, start, end, fn){
+    updateSliderInput(name, value=fn(input[[name]]), min=start, max=end, session=session)
+  }
+  rv <- reactiveValues(
+    prev_th = NULL, 
+    start_year = NULL,
+    end_year = NULL
+  )
+  observeEvent(input$time_horizon, {
+    start_yr <- rv$start_year <- get_year_from_date(input$time_horizon[1])
+    end_yr   <- rv$end_year <- get_year_from_date(input$time_horizon[2])
+    if(is_null(rv$prev_th)){rv$prev_th <- input$time_horizon}
+    old_start <- get_year_from_date(rv$prev_th[1])
+    old_end   <- get_year_from_date(rv$prev_th[2])
+    
+    fn <- partial(keep_year_proportion, old_start=old_start, old_end=old_end, start=start_yr, end=end_yr)
+    
+    for (slider in c("year","start_disease_year", "start_treatment_year", "replant_year_orchard")) {
+      updateYearSliderInput(slider, start_yr, end_yr, fn)
+    }
+    rv$prev_th <- input$time_horizon
+    })
+  
+  # Run simulations
+  t_disease_year <- reactive(input$start_disease_year - rv$start_year + 1)
+  t_treatment_year <- reactive(input$start_treatment_year - rv$start_year + 1)
+  t_replant_year <- reactive(input$replant_year_orchard - rv$start_year + 1)
+  current_year <- reactive(input$year)
   output_price <- reactive(input$output_price)
   
   n_trees_in_orchard <- 576 # 24*24, number of trees planted in one acre
   
   tree_health_data <- reactive({
     simulateControlScenarios(
-      year_start = start_year(),
-      year_end = end_year(),
-      t_disease_year = input$start_disease_year,
-      t_treatment_year = input$start_treatment_year,
+      year_start = rv$start_year,
+      year_end = rv$end_year,
+      t_disease_year = t_disease_year(),
+      t_treatment_year = t_treatment_year(),
       disease_spread_rate = input$disease_spread_rate/100, # function expects a percentage (fraction)
       disease_growth_rate = input$disease_growth_rate/100,
       max_yield = input$max_yield/n_trees_in_orchard,
       output_price = output_price(),
       annual_cost = input$annual_cost,
       replanting_strategy = input$replanting_strategy,
-      replant_year = input$replant_year_orchard,
+      replant_year = t_replant_year(),
       replant_cost_tree = input$replant_cost_tree,
       replant_cost_orchard = input$replant_cost_orchard,
       inf_intro = input$inf_intro,
@@ -238,7 +273,7 @@ shinyServer(function(input, output, session) {
           group_by(time) %>%
           summarize(across(-c(x,y),~sum(.,na.rm = T))) %>%
           ungroup() %>% 
-          mutate(t=time-start_year(), 
+          mutate(t=time-rv$start_year, 
                  npv_multiplier=((1+input$percent_interest/100.)**-t)) %>% 
           arrange(desc(t)) %>% 
           mutate(across(-c(time, npv_multiplier, t),~cumsum(.*npv_multiplier), .names="{.col}_npv")) %>%
@@ -285,8 +320,8 @@ shinyServer(function(input, output, session) {
         select(time, `Disease Free`) %>%
         mutate(max_net_returns= input$output_price*`Disease Free`-input$annual_cost) %>%
         # add the initial cost of planting the orchard
-        add_row(time=start_year() - 1, max_net_returns=-input$replant_cost_orchard) %>%
-        filter(time <= start_year() + TREE_FIRST_FULL_YIELD_YEAR) %>% 
+        add_row(time=rv$start_year - 1, max_net_returns=-input$replant_cost_orchard) %>%
+        filter(time <= rv$start_year + TREE_FIRST_FULL_YIELD_YEAR) %>% 
         summarize(value=sum(max_net_returns)))$value
       
       DT::datatable(bind_rows(
@@ -327,7 +362,7 @@ shinyServer(function(input, output, session) {
                       add_column(`Economic Result`="Net Present Value From Current Year ($/ac)", .before = 1),
                     #Row 5: operating duration
                     tree_health_aggregated_orchard_cost_yield_and_returns %>%
-                      filter(time>start_year()+TREE_FIRST_FULL_YIELD_YEAR & time < start_year()+input$replant_year_orchard+1) %>%
+                      filter(time>rv$start_year+TREE_FIRST_FULL_YIELD_YEAR & time < t_replant_year()+1) %>%
                       # orders descending order so that the function cumsum sums starting from the end of the life of the orchard
                       arrange(desc(time)) %>%
                       mutate(across(c(`Treatment 1`, `Treatment 2`, `No Treatment`), ~cumsum(.)*input$output_price-input$annual_cost*n(), .names = "{.col}")) %>% # TODO: annualize

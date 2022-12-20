@@ -81,7 +81,11 @@ ui <- tabsetPanel(
         fluidRow(
             column(2,
                 tags$div(
-                  uiOutput('annual_cost_res'),
+                  numericInput("annual_cost",
+                               # Using infoHoverLabel from ui.R to add an informational tooltip
+                               infoHoverLabel("Annual Production Cost ($/ac/yr)"),
+                               value = 4885 + 1000),
+                  #uiOutput('annual_cost_res'),
                               dropdownButton(
                                 tags$h3("Production Cost Inputs"),
                                 numericInput("annual_cost_1",
@@ -147,9 +151,9 @@ ui <- tabsetPanel(
                                selected = 'orchard_replant'),
                    sliderInput("replant_year_orchard",
                                infoHoverLabel("Planned Replanting Year"),
-                               value=20,
-                               min=1,
-                               max=40),
+                               min=2022, 
+                               max=2062,
+                               value = 2042),
                    numericInput("replant_cost_tree",
                                 infoHoverLabel("Tree Replanting Cost"),
                                 10),
@@ -192,21 +196,22 @@ ui <- tabsetPanel(
                 sliderInput("year",
                             infoHoverLabel("Current Year",
                                            "Current year in simulation. Consider changing the year the treatment starts to see the impact on the orchard."),
-                            min = 1,
-                            max = 40,
-                            value = 15,
+                            min=2022, 
+                            max=2062,
+                            value = 2037,
                             animate = TRUE),
                 sliderInput("start_disease_year",
                             infoHoverLabel("Year Disease Starts"),
-                            min = 1,
-                            max = 30,
-                            value = 1),
+                            min=2022, 
+                            max=2062,
+                            pre='',
+                            value = 2022),
                 sliderInput("start_treatment_year",
                             infoHoverLabel("Year Treatment Starts",
                                            "Year Treatment 1 and Treatment 2 start being applied. Consider changing the options in `Treatment Settings` to understand their impact."),
-                            min = 1,
-                            max = 30,
-                            value = 1)
+                            min=2022, 
+                            max=2062,
+                            value = 2022)
                 ),
     
             # Show a plot of the generated distribution
