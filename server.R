@@ -16,10 +16,11 @@ library(glue)
 source("ui.R")
 
 shinyServer(function(input, output, session) {
-  
+  # Only input that is also updated by other inputs e.g. sum(annual_cost_{n})
   output$annual_cost_res <- renderUI(
     numericInput("annual_cost",
-                 infoHoverLabel("Annual Production Cost ($/ac/yr)","Annual Production Cost ($/ac/yr)"),
+                 # Using infoHoverLabel from ui.R to add an informational tooltip
+                 infoHoverLabel("Annual Production Cost ($/ac/yr)"),
                  value = input$annual_cost_1+input$annual_cost_2)
   )
   # Hide dashboard by default
@@ -74,46 +75,31 @@ shinyServer(function(input, output, session) {
       jqui_remove_class(glue("#{id}_menu_icon"), "hidden_menu_arrow")
     }
   }
+  toggle_menu_options <- function(menu_name){
+    # Toggles the menu hidden and shown using the main button
+      observeEvent(input[[glue("{menu_name}_menu_toggle")]], {
+        jqui_toggle(glue('#{menu_name}_menu'), effect = "blind")
+        is_hidden_menu_list[[menu_name]] <<- !is_hidden_menu_list[[menu_name]]
+        update_menu_arrow_icon_class(menu_name, is_hidden_menu_list[[menu_name]])
+      })
+  }
+  toggle_menu_close <- function(menu_name){
+    # Closes the menu with the close button
+    observeEvent(input[[glue("{menu_name}_menu_hide")]], {
+      jqui_hide(glue('#{menu_name}_menu'), effect = "blind")
+      is_hidden_menu_list[[menu_name]] <- TRUE
+      update_menu_arrow_icon_class(menu_name, is_hidden_menu_list[[menu_name]])
+    })
+  }
   
-  # Toggles the disease menu options button
-  observeEvent(input$disease_menu_toggle, {
-    jqui_toggle('#disease_menu', effect = "blind")
-    is_hidden_menu_list[["disease"]] <<- !is_hidden_menu_list[["disease"]]
-    update_menu_arrow_icon_class("disease", is_hidden_menu_list[["disease"]])
-  })
-  # Closes the menu with the close button
-  observeEvent(input$disease_menu_hide, {
-    jqui_hide('#disease_menu', effect = "blind")
-    is_hidden_menu_list[["disease"]] <- TRUE
-    update_menu_arrow_icon_class("disease", is_hidden_menu_list[["disease"]])
-  })
+  toggle_menu_options('disease')
+  toggle_menu_close('disease')
   
-  # Toggles the replanting menu options
-  observeEvent(input$replanting_menu_toggle, {
-    jqui_toggle('#replanting_menu', effect = "blind")
-    is_hidden_menu_list[["replanting"]] <<- !is_hidden_menu_list[["replanting"]]
-    update_menu_arrow_icon_class("replanting", is_hidden_menu_list[["replanting"]])
-  })
-  # Closes the menu with the close button
-  observeEvent(input$replanting_menu_hide, {
-    jqui_hide('#replanting_menu', effect = "blind")
-    is_hidden_menu_list[["replanting"]] <- TRUE
-    update_menu_arrow_icon_class("replanting", is_hidden_menu_list[["replanting"]])
-  })
+  toggle_menu_options('replanting')
+  toggle_menu_close('replanting')
   
-  # Toggles the treatments menu options
-  observeEvent(input$treatments_menu_toggle, {
-    jqui_toggle('#treatments_menu', effect = "blind")
-    is_hidden_menu_list[["treatments"]] <<- !is_hidden_menu_list[["treatments"]]
-    update_menu_arrow_icon_class("treatments", is_hidden_menu_list[["treatments"]])
-  })
-  # Closes the menu with the close button
-  observeEvent(input$treatments_menu_hide, {
-    jqui_hide('#treatments_menu', effect = "blind")
-    is_hidden_menu_list[["treatments"]] <- TRUE
-    update_menu_arrow_icon_class("treatments", is_hidden_menu_list[["treatments"]])
-  })
-  
+  toggle_menu_options('treatments')
+  toggle_menu_close('treatments')
   
   
   #Run simulations within reactive element
@@ -148,7 +134,7 @@ shinyServer(function(input, output, session) {
   
     output$orchard_health <- renderPlotly({
       #Raster blocks with color indicating disease spread
-      gg <- tree_health_data() %>%
+      data <- tree_health_data() %>%
         dplyr::select(-ends_with(c("net_returns", "realized_costs"))) %>%
         dplyr::filter(time==current_year()) %>%
         #When the yield is all zero, the heatmap turns grey. I add a tiny amount of noise to keep it green.
@@ -157,19 +143,25 @@ shinyServer(function(input, output, session) {
         pivot_longer(-c(x,y,time)) %>%
         mutate(yield=ifelse(value<0,0,value))
         
-      gg2 <<- gg %>% ggplot(aes(x=x,y=y,fill=yield)) +
-        geom_tile(size=.1,show.legend = F) +
-        scale_fill_gradient(name="Tree Health",low = "red", high = "green",limit=c(0,1)) +
-        scale_x_continuous(name = "Column")+#,breaks = seq.int(1,24,2),minor_breaks = NULL) +
-        scale_y_continuous(name = "Row")+#,breaks = seq.int(1,24,2),minor_breaks = NULL) +
-        theme_bw(base_size = 15) +
-        #coord_equal() +
-        labs(title = "Block Health") +
-        facet_wrap(~name,nrow = 1)
-      fig <- ggplotly(gg2, source='orchard_health') %>%
-        plotly::layout(xaxis = list(label="column"),
-                       yaxis = list(constrain="domain", constraintoward='top', label="row")) %>%
-        event_register("plotly_hover")
+        # Use ggplot to plot the yield heatmap
+        plot <- ggplot(data, aes(x=x,y=y,fill=yield, customdata=name)) +
+          geom_tile(size=.1,show.legend = F) +
+          scale_fill_gradient(name="Tree Health",low = "red", high = "green",limit=c(0,1)) +
+          scale_x_continuous(name = "Column")+#,breaks = seq.int(1,24,2),minor_breaks = NULL) +
+          scale_y_continuous(name = "Row")+#,breaks = seq.int(1,24,2),minor_breaks = NULL) +
+          theme_bw(base_size = 15) +
+          labs(title = "Orchard Health") +
+          facet_wrap(~name,nrow = 1)
+        
+        # Transform into a plotly plot
+        fig <- ggplotly(plot, source='orchard_health') %>%
+          plotly::layout(xaxis = list(label="column"),
+                         yaxis = list(constrain="domain", constraintoward='top', label="row"),
+                         hovermode='closest') %>%
+          style(hovertemplate="Tree Yield: %{z:.0%}", name='') %>%
+          event_register("plotly_hover")
+        
+        return(fig)
       })
     
     output$tree_health <- renderPlotly({
@@ -200,7 +192,7 @@ shinyServer(function(input, output, session) {
           geom_vline(xintercept = current_year(),linetype="dashed") +
           geom_vline(xintercept = current_year(),linetype="dashed") +
           scale_y_continuous(labels = label_comma()) +
-          labs(x="Year",y="Yield",title="Tree Yield Over Time") +
+          labs(x="Year",y="Yield (lbs/tree)",title="Tree Yield Over Time") +
           theme_bw(base_size = 15) +
           theme(legend.title = element_blank(),legend.position = "bottom")
       } else if (selected_net_returns){
@@ -215,7 +207,7 @@ shinyServer(function(input, output, session) {
           geom_point() +
           geom_vline(xintercept = current_year(),linetype="dashed") +
           scale_y_continuous(labels = label_comma()) +
-          labs(x="Year",y="Net returns",title="Net Returns Over Time") +
+          labs(x="Year",y="Net returns ($)",title="Net Returns Over Time") +
           theme_bw(base_size = 15) +
           theme(legend.title = element_blank(),legend.position = "bottom") 
       }  else if (selected_return_to_treatment){
@@ -235,7 +227,7 @@ shinyServer(function(input, output, session) {
           geom_point() +
           geom_vline(xintercept = current_year(),linetype="dashed") +
           scale_y_continuous(labels = label_comma()) +
-          labs(x="Year",y="Returns to Treatment",title="Returns to Treatment Over Time") +
+          labs(x="Year",y="Returns to Treatment ($)",title="Returns to Treatment Over Time") +
           theme_bw(base_size = 15) +
           theme(legend.title = element_blank(),legend.position = "bottom") 
       }  else if (selected_npv) {
@@ -245,7 +237,7 @@ shinyServer(function(input, output, session) {
           summarize(across(-c(x,y),~sum(.,na.rm = T))) %>%
           ungroup() %>% 
           mutate(t=time-start_year(), 
-                 npv_multiplier=((1+0.03)**-t)) %>% 
+                 npv_multiplier=((1+input$percent_interest/100.)**-t)) %>% 
           arrange(desc(t)) %>% 
           mutate(across(-c(time, npv_multiplier, t),~cumsum(.*npv_multiplier), .names="{.col}_npv")) %>%
           select(c(ends_with("_npv"), time)) %>%
@@ -256,28 +248,29 @@ shinyServer(function(input, output, session) {
           geom_point() +
           geom_vline(xintercept = current_year(),linetype="dashed") +
           scale_y_continuous(labels = label_comma()) +
-          labs(x="Year",y="Net present value",title="Net Present Value Over Time") +
+          labs(x="Year",y="Net present value ($)",title="Net Present Value Over Time") +
           theme_bw(base_size = 15) +
           theme(legend.title = element_blank(),legend.position = "bottom") 
       } else {
         df <- df %>%
           dplyr::select(-ends_with(c("net_returns", "realized_costs"))) %>%
           group_by(time) %>%
-          summarize(across(-c(x,y),~sum(.,na.rm = T))) %>%
+          # Looking at thousands of dollars in profit
+          summarize(across(-c(x,y),~sum(./1000,na.rm = T))) %>%
           ungroup() %>%
           pivot_longer(-c(time)) %>%
           ggplot(aes(x=time,y=value,color=name)) +
           geom_line() +
           geom_point() +
           geom_vline(xintercept = current_year(),linetype="dashed") +
-          scale_y_continuous(labels = label_comma()) +
-          labs(x="Year",y="Yield",title="Block Yield Over Time") +
+          scale_y_continuous(labels = unit_format(unit = "K")) +
+          labs(x="Year",y="Yield (lbs/ac)",title="Orchard Yield Over Time") +
           theme_bw(base_size = 15) +
           theme(legend.title = element_blank(),legend.position = "bottom")
       }
       #Plot of block yield over time
       ggplotly(df)  %>%
-        layout(legend = list(orientation = 'h')) #Need to split legend over two rows)
+        layout(legend = list(orientation = 'h', y=-0.5, fontsize=12)) #Need to split legend over two rows)
     })
     
     output$mytable <- DT::renderDataTable({
@@ -291,8 +284,7 @@ shinyServer(function(input, output, session) {
         mutate(max_net_returns= input$output_price*`Max Yield`-input$annual_cost) %>%
         # add the initial cost of planting the orchard
         add_row(time=start_year() - 1, max_net_returns=-input$replant_cost_orchard) %>%
-        # TODO: connect 5 and variable tree_first_full_yield_year in global.R
-        filter(time <= start_year() + 5) %>% 
+        filter(time <= start_year() + TREE_FIRST_FULL_YIELD_YEAR) %>% 
         summarize(value=sum(max_net_returns)))$value
       
       DT::datatable(bind_rows(
@@ -325,14 +317,14 @@ shinyServer(function(input, output, session) {
                       select(c(time, ends_with("net_returns"))) %>%
                       filter(time >= current_year()) %>%
                       # With a 3% discount rate
-                      mutate(npv_multiplier=1/((1+0.03)**(time - current_year())),
+                      mutate(npv_multiplier=1/((1+input$percent_interest/100.0)**(time - current_year())),
                              across(ends_with("net_returns"), ~(.*npv_multiplier), .names = "{.col}")) %>% 
                       summarise(across(ends_with("net_returns"), ~dollar(sum(.),accuracy=1))) %>%
                       rename(`Max Yield`=max_net_returns,`No Treatment`=nt_net_returns,`Treatment 1`=t1_net_returns,`Treatment 2`=t2_net_returns) %>%
                       add_column(`Economic Result`="Net Present Value From Current Year ($/ac)", .before = 1),
                     #Row 5: operating duration
                     tree_health_aggregated_orchard_cost_yield_and_returns %>%
-                      filter(time>start_year()+5 & time < start_year()+input$replant_year_orchard) %>%
+                      filter(time>start_year()+TREE_FIRST_FULL_YIELD_YEAR & time < start_year()+input$replant_year_orchard) %>%
                       # orders descending order so that the function cumsum sums starting from the end of the life of the orchard
                       arrange(desc(time)) %>%
                       mutate(across(c(`Treatment 1`, `Treatment 2`, `No Treatment`), ~cumsum(.)*input$output_price-input$annual_cost*n(), .names = "{.col}")) %>% # TODO: annualize

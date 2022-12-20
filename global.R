@@ -1,13 +1,15 @@
-#Orchard simulation functions
+#Orchard simulation functions and constants
+
+TREE_FIRST_FULL_YIELD_YEAR <- 5
 
 get_year_from_date <- function(date){
   return(as.integer(format(date, "%Y")))
 }
 
-grow_tree_function <- function(tree_ages,             #Matrix or vector of tree ages
-                       max_yield,                     #Yield at maturity
-                       tree_first_full_yield_year=5,  #Year tree reaches maturity
-                       tree_end_year=40){             #Productive life of tree
+grow_tree_function <- function(tree_ages,                                      #Matrix or vector of tree ages
+                       max_yield,                                              #Yield at maturity
+                       tree_first_full_yield_year=TREE_FIRST_FULL_YIELD_YEAR,  #Year tree reaches maturity
+                       tree_end_year=40){                                      #Productive life of tree
   
   #Growth function - trees mature at `tree_first_full_yield_year`, 
   #                        survive until `tree_end_year`
