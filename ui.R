@@ -12,9 +12,15 @@ library(shinyWidgets)
 library(plotly)
 library(DT)
 
-infoHoverLabel<- function(label, info_text=NA){
+infoHoverLabel<- function(label, info_text=NA, link=NA){
   info_text <- ifelse(is.na(info_text), label, info_text)
-  return(shiny::HTML(paste("<div><text>", label, "</text>", shiny::icon("circle-info", title=info_text), "</div>")))
+  link_part_one <- ifelse(is.na(link), '', paste0("<a href='", link, "'>"))
+  link_part_two <- ifelse(is.na(link), '', "</a>")
+  return(shiny::HTML(
+    paste(
+      "<div><text>", label, "</text>", link_part_one, 
+      shiny::icon("circle-info", title=info_text), link_part_two, "</div>")
+    ))
 }
 menuIconLabel <- function(label, id_prefix){
   return(shiny::HTML(
@@ -99,7 +105,9 @@ ui <- tabsetPanel(
                              infoHoverLabel("Peach Price ($/lb)"),
                              value=1.1),
                 numericInput("percent_interest",
-                             infoHoverLabel("Interest Rate (%)"),
+                             infoHoverLabel("Interest Rate (%)",
+                                            "Interest rate used to calculate the net present value of the orchard. Consider using a nominal interest rate that includes inflation. For more information, click this icon for an Investopedia article about interest rates.",
+                                            link="https://www.investopedia.com/terms/i/interestrate.asp"),
                              value=3,
                              min=0,
                              max=100),
@@ -107,17 +115,19 @@ ui <- tabsetPanel(
                  tags$div(
                    id="disease_menu",
                    numericInput("inf_intro",
-                                infoHoverLabel("Infectious Introductions"),
+                                infoHoverLabel("Initial Number of Trees Infected", "Initial number of trees infected at `Year Disease Starts`."),
                                 min = 0,
                                 max = 100,
                                 value=10),
                    sliderInput("disease_spread_rate",
-                               infoHoverLabel("Rate of Disease Spread Between Trees (%)"),
+                               infoHoverLabel("Rate of Disease Spread Between Trees Per Year (%/yr)",
+                                              "Rate of disease spread between trees per year. Reduces yield of neighboring trees by this percentage of each tree's amount of disease if no treatment is used."),
                                min = 0,
                                max = 100,
                                value=10),
                    sliderInput("disease_growth_rate",
-                               infoHoverLabel("Rate of Disease Growth Within a Tree (%)"),
+                               infoHoverLabel("Rate of Disease Growth Within a Tree Per Year (%/yr)",
+                                              "Rate of disease growth within a tree per year. Reduces yield by this percentage, with additional decreases from neighboring trees spreading disease. This decrease can be prevented by sufficient treatment."),
                                min = 0,
                                max = 100,
                                value=20),
@@ -154,20 +164,20 @@ ui <- tabsetPanel(
                  tags$div(
                    id="treatments_menu",
                    sliderInput("control1",
-                               infoHoverLabel("Treatment 1 Spread Reduction (%)"),
+                               infoHoverLabel("Treatment 1 Spread Reduction Rate Per Year (%/yr)", "Percentage reduction of disease spread of all trees per year after `Year Treatment Starts` of Treatment 1. Note that the treatments do not heal trees from disease."),
                                min = 0,
                                max = 100,
                                value=10),
                    numericInput("t1_cost",
-                                infoHoverLabel("Treatment 1 Cost ($/ac/yr)"),
+                                infoHoverLabel("Treatment 1 Cost ($/ac/yr)", "Treatment 1 cost per acre per year after `Year Treatment Starts`. Note that more effective treatments are likely more expensive."),
                                 value=350),
                    sliderInput("control2",
-                               infoHoverLabel("Treatment 2 Spread Reduction (%)"),
+                               infoHoverLabel("Treatment 2 Spread Reduction Rate Per Year (%/yr)", "Percentage reduction of disease spread of all trees per year after `Year Treatment Starts` of Treatment 2. Note that the treatments do not heal trees from disease."),
                                min = 0,
                                max = 100,
                                value=20),
                    numericInput("t2_cost",
-                                infoHoverLabel("Treatment 2 Cost ($/ac/yr)"),
+                                infoHoverLabel("Treatment 2 Cost ($/ac/yr)", "Treatment 2 cost per acre per year after `Year Treatment Starts`. Note that more effective treatments are likely more expensive."),
                                 value=650),
                    actionButton("treatments_menu_hide", "Close menu"),
                  )
@@ -180,8 +190,8 @@ ui <- tabsetPanel(
                            value = c(as.Date('2022-01-01'), as.Date('2062-01-01')),
                            timeFormat = '%Y'),
                 sliderInput("year",
-                            infoHoverLabel("Year",
-                                           "Year"),
+                            infoHoverLabel("Current Year",
+                                           "Current year in simulation. Consider changing the year the treatment starts to see the impact on the orchard."),
                             min = 1,
                             max = 40,
                             value = 15,
@@ -192,7 +202,8 @@ ui <- tabsetPanel(
                             max = 30,
                             value = 1),
                 sliderInput("start_treatment_year",
-                            infoHoverLabel("Year Treatment Starts"),
+                            infoHoverLabel("Year Treatment Starts",
+                                           "Year Treatment 1 and Treatment 2 start being applied. Consider changing the options in `Treatment Settings` to understand their impact."),
                             min = 1,
                             max = 30,
                             value = 1)

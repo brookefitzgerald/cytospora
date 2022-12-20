@@ -138,8 +138,8 @@ shinyServer(function(input, output, session) {
         dplyr::select(-ends_with(c("net_returns", "realized_costs"))) %>%
         dplyr::filter(time==current_year()) %>%
         #When the yield is all zero, the heatmap turns grey. I add a tiny amount of noise to keep it green.
-        mutate(across(-c(x,y,time),~ifelse(`Max Yield`>0, ./`Max Yield`, 1-runif(n(),max=1e-10)))) %>%
-        dplyr::select(-`Max Yield`) %>%
+        mutate(across(-c(x,y,time),~ifelse(`Disease Free`>0, ./`Disease Free`, 1-runif(n(),max=1e-10)))) %>%
+        dplyr::select(-`Disease Free`) %>%
         pivot_longer(-c(x,y,time)) %>%
         mutate(yield=ifelse(value<0,0,value))
         
@@ -158,7 +158,9 @@ shinyServer(function(input, output, session) {
           plotly::layout(xaxis = list(label="column"),
                          yaxis = list(constrain="domain", constraintoward='top', label="row"),
                          hovermode='closest') %>%
-          style(hovertemplate="Tree Yield: %{z:.0%}", name='') %>%
+          # style function updates all traces with the specified options
+          style(hovertemplate="Tree Yield: %{z:.0%}<extra></extra>") %>%
+          # makes the plotly hover event accessible to plot the individual tree yields
           event_register("plotly_hover")
         
         return(fig)
@@ -200,7 +202,7 @@ shinyServer(function(input, output, session) {
           group_by(time) %>%
           summarize(across(-c(x,y),~sum(.,na.rm = T))) %>%
           ungroup() %>% 
-          rename(`Max Yield`=max_net_returns,`No Treatment`=nt_net_returns,`Treatment 1`=t1_net_returns,`Treatment 2`=t2_net_returns) %>%
+          rename(`Disease Free`=max_net_returns,`No Treatment`=nt_net_returns,`Treatment 1`=t1_net_returns,`Treatment 2`=t2_net_returns) %>%
           pivot_longer(c(-time)) %>%
           ggplot(aes(x=time, y=value, color=name)) +
           geom_line() +
@@ -241,7 +243,7 @@ shinyServer(function(input, output, session) {
           arrange(desc(t)) %>% 
           mutate(across(-c(time, npv_multiplier, t),~cumsum(.*npv_multiplier), .names="{.col}_npv")) %>%
           select(c(ends_with("_npv"), time)) %>%
-          rename(`Max Yield`=max_net_returns_npv,`No Treatment`=nt_net_returns_npv,`Treatment 1`=t1_net_returns_npv,`Treatment 2`=t2_net_returns_npv) %>%
+          rename(`Disease Free`=max_net_returns_npv,`No Treatment`=nt_net_returns_npv,`Treatment 1`=t1_net_returns_npv,`Treatment 2`=t2_net_returns_npv) %>%
           pivot_longer(c(-time)) %>%
           ggplot(aes(x=time, y=value, color=name)) +
           geom_line() +
@@ -280,8 +282,8 @@ shinyServer(function(input, output, session) {
         ungroup()
 
       replanted_yield_until_max <- (tree_health_aggregated_orchard_cost_yield_and_returns %>%
-        select(time, `Max Yield`) %>%
-        mutate(max_net_returns= input$output_price*`Max Yield`-input$annual_cost) %>%
+        select(time, `Disease Free`) %>%
+        mutate(max_net_returns= input$output_price*`Disease Free`-input$annual_cost) %>%
         # add the initial cost of planting the orchard
         add_row(time=start_year() - 1, max_net_returns=-input$replant_cost_orchard) %>%
         filter(time <= start_year() + TREE_FIRST_FULL_YIELD_YEAR) %>% 
@@ -292,14 +294,14 @@ shinyServer(function(input, output, session) {
                     tree_health_aggregated_orchard_cost_yield_and_returns %>%
                       summarize(across(-c(time),~mean(.,na.rm = T))) %>%
                       mutate(across(everything(),~comma(.,accuracy=1))) %>%
-                      select(`Max Yield`,`No Treatment`,`Treatment 1`,`Treatment 2`) %>%
+                      select(`Disease Free`,`No Treatment`,`Treatment 1`,`Treatment 2`) %>%
                       add_column(`Economic Result`="Yield (avg/ac/yr)",.before = 1),
                     #Row 2: net returns
                     tree_health_aggregated_orchard_cost_yield_and_returns %>%
                       summarize(across(-c(time),~mean(.,na.rm = T))) %>%
                       mutate(across(everything(),~dollar(.,accuracy=1))) %>%
                       select(ends_with("net_returns")) %>%
-                      rename(`Max Yield`=max_net_returns,`No Treatment`=nt_net_returns,`Treatment 1`=t1_net_returns,`Treatment 2`=t2_net_returns) %>%
+                      rename(`Disease Free`=max_net_returns,`No Treatment`=nt_net_returns,`Treatment 1`=t1_net_returns,`Treatment 2`=t2_net_returns) %>%
                       add_column(`Economic Result`="Net Returns (avg/ac/yr)",.before = 1),
                     #Row 3: benefit of treatment
                     tree_health_aggregated_orchard_cost_yield_and_returns %>%
@@ -308,8 +310,8 @@ shinyServer(function(input, output, session) {
                              t2_net_returns=(t2_net_returns - nt_net_returns)/n_years,
                              across(everything(),~dollar(.,accuracy=1))) %>%
                       select(ends_with("net_returns")) %>%
-                      rename(`Max Yield`=max_net_returns,`No Treatment`=nt_net_returns,`Treatment 1`=t1_net_returns,`Treatment 2`=t2_net_returns) %>%
-                      mutate(`Max Yield`="",
+                      rename(`Disease Free`=max_net_returns,`No Treatment`=nt_net_returns,`Treatment 1`=t1_net_returns,`Treatment 2`=t2_net_returns) %>%
+                      mutate(`Disease Free`="",
                              `No Treatment`="") %>%
                       add_column(`Economic Result`="Treatment Returns (avg/ac/yr)",.before = 1),
                     #Row 4: net present value of returns at selected year
@@ -320,20 +322,20 @@ shinyServer(function(input, output, session) {
                       mutate(npv_multiplier=1/((1+input$percent_interest/100.0)**(time - current_year())),
                              across(ends_with("net_returns"), ~(.*npv_multiplier), .names = "{.col}")) %>% 
                       summarise(across(ends_with("net_returns"), ~dollar(sum(.),accuracy=1))) %>%
-                      rename(`Max Yield`=max_net_returns,`No Treatment`=nt_net_returns,`Treatment 1`=t1_net_returns,`Treatment 2`=t2_net_returns) %>%
+                      rename(`Disease Free`=max_net_returns,`No Treatment`=nt_net_returns,`Treatment 1`=t1_net_returns,`Treatment 2`=t2_net_returns) %>%
+                      mutate(`Disease Free`="") %>%
                       add_column(`Economic Result`="Net Present Value From Current Year ($/ac)", .before = 1),
                     #Row 5: operating duration
                     tree_health_aggregated_orchard_cost_yield_and_returns %>%
-                      filter(time>start_year()+TREE_FIRST_FULL_YIELD_YEAR & time < start_year()+input$replant_year_orchard) %>%
+                      filter(time>start_year()+TREE_FIRST_FULL_YIELD_YEAR & time < start_year()+input$replant_year_orchard+1) %>%
                       # orders descending order so that the function cumsum sums starting from the end of the life of the orchard
                       arrange(desc(time)) %>%
                       mutate(across(c(`Treatment 1`, `Treatment 2`, `No Treatment`), ~cumsum(.)*input$output_price-input$annual_cost*n(), .names = "{.col}")) %>% # TODO: annualize
                       # chooses the first time the expected profit from the net returns is outweighed by the replanted yield
-                      summarise(`Treatment 1`=as.character(first(time[`Treatment 1` > replanted_yield_until_max])),
-                                `Treatment 2`=as.character(first(time[`Treatment 2` > replanted_yield_until_max])),
-                                `No Treatment`=as.character(first(time[`No Treatment` > replanted_yield_until_max])),
-                                `Max Yield`=as.character(first(time[`Max Yield` > replanted_yield_until_max]))) %>%
-                      mutate(`Max Yield`="") %>%
+                      summarise(`Treatment 1`=as.character(first(time[`Treatment 1` >= replanted_yield_until_max])),
+                                `Treatment 2`=as.character(first(time[`Treatment 2` >= replanted_yield_until_max])),
+                                `No Treatment`=as.character(first(time[`No Treatment` >= replanted_yield_until_max])),
+                                `Disease Free`=as.character(first(time[`Disease Free` >= replanted_yield_until_max]))) %>%
                       add_column(`Economic Result`="Optimal First Replanting Year",.before = 1),
                     ),
                     options = list(dom = 't',
