@@ -1,0 +1,59 @@
+.landing_page_div {
+  margin-top: 100px;
+  margin-right: 20%;
+  margin-left: 20%;
+}
+
+.landing_page_div > h1 {
+  font-size: 50px;
+  text-align: center;
+}
+
+p {
+  text-align: center;
+  font-size: 24px;
+}
+.center {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+  vertical-align: middle;
+}
+
+.btn#go_to_app {
+  display: block;
+  margin-top: 10px;
+  margin-left: auto;
+  margin-right: auto;
+  width: 80%;
+  background-color: #1e4d2b;
+  color: white;
+  text-align: center;
+  padding: 15px, 32px;
+  font-size: 30px;
+}
+
+.btn#go_to_app:hover {
+  box-shadow: 0 12px 16px 0 rgba(0,0,0,0.24), 0 17px 50px 0 rgba(0,0,0,0.19);
+}
+
+.menu {
+  background-color: #d9d9d9;
+  font-weight: bold;
+  width: 100%; 
+  white-space: normal;
+}
+
+.hidden_menu_arrow {
+  transform : rotate(270deg);
+}
+
+/*In order to update the year slider min/maxes via the time horizon slider bounds,
+the input is created in server.R (not ui.R like all the other inputs). This 
+causes an error as the rest of the code attempts to access the value of time years
+though they have not yet been initialized.
+The CSS below hides the temporary error from this process (and all other errors, 
+should be commented out during development). */
+
+.shiny-output-error { visibility: hidden; }
+.shiny-output-error:before { visibility: hidden; }

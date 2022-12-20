@@ -1,13 +1,15 @@
-#Orchard simulation functions
+#Orchard simulation functions and constants
+
+TREE_FIRST_FULL_YIELD_YEAR <- 5
 
 get_year_from_date <- function(date){
   return(as.integer(format(date, "%Y")))
 }
 
-grow_tree_function <- function(tree_ages,             #Matrix or vector of tree ages
-                       max_yield,                     #Yield at maturity
-                       tree_first_full_yield_year=5,  #Year tree reaches maturity
-                       tree_end_year=40){             #Productive life of tree
+grow_tree_function <- function(tree_ages,                                      #Matrix or vector of tree ages
+                       max_yield,                                              #Yield at maturity
+                       tree_first_full_yield_year=TREE_FIRST_FULL_YIELD_YEAR,  #Year tree reaches maturity
+                       tree_end_year=40){                                      #Productive life of tree
   
   #Growth function - trees mature at `tree_first_full_yield_year`, 
   #                        survive until `tree_end_year`
@@ -111,8 +113,7 @@ tree_sim <- function(o_rows=24, #Block dimension row
     
     #Grow trees subject to damage
     tree_shell[[t+1]] <- tree_shell[[t]] + grow_trees(age_shell[[t]]) - disease_shell[,,t]
-    tree_shell[[t+1]] <- pmax(zeros(o_rows, o_cols), tree_shell[[t+1]]) # set negative yields to zero
-    
+    tree_shell[[t+1]] <- pmax(ones(o_rows, o_cols), tree_shell[[t+1]]) # set negative yields to zero
     control_effort <- ifelse(t >= t_treatment_year, activated_control_effort, 0.0)
     
     #Propagate disease if disease spread has started
@@ -138,7 +139,7 @@ tree_sim <- function(o_rows=24, #Block dimension row
       
       # Replant orchard if part of mitigation strategy
       if((replant_orchard==TRUE) & (t==replant_year)){
-        age_shell[[t+1]] <- 1 # Replanted tree is 1 year old
+        age_shell[[t+1]] <- 1.0 # Replanted tree is 1 year old
         tree_shell[[t+1]] <- 1.0 # Replanted tree has initial yields
         shuffled_inf_mat <- matrix(sample(inf_mat), nrow=o_rows)
         disease_shell[,,t+1] <- shuffled_inf_mat # Replanted trees have initial number of disease starts, but different places
@@ -147,6 +148,7 @@ tree_sim <- function(o_rows=24, #Block dimension row
         # TODO: Figure out if disease should spread again/if control effort should continue. 
       }
     }
+    tree_shell[[t+1]] <- pmax(zeros(o_rows, o_cols), tree_shell[[t+1]]) # set negative yields to zero
   }
   
   tree_health <- pmap_df(list(tree_shell, c(1:TH), cost_shell),
@@ -202,7 +204,7 @@ simulateControlScenarios <- function(year_start,
                                            disease_spread_rate=disease_spread_rate,
                                            disease_growth_rate=disease_growth_rate)
   
-  tree_health_max <- tree_sim_with_shared_settings(inf_starts = 0) %>%   #inf_starts=0 implies no infection for max yield
+  tree_health_max <- tree_sim_with_shared_settings(inf_starts = 0) %>%   #inf_starts=0 implies no infection for Disease Free
     rename_with(~str_c("max_",.),-c(x,y,time))
   
   tree_health_nt <- tree_sim_with_shared_settings(inf_starts = inf_intro) %>%   #nt implies no treatment
@@ -224,5 +226,5 @@ simulateControlScenarios <- function(year_start,
   inner_join(tree_health_nt,tree_health_max, by = c("x", "y", "time")) %>%
     inner_join(t1, by = c("x", "y", "time")) %>%
     inner_join(t2, by = c("x", "y", "time")) %>%
-    rename(`Max Yield`=max_yield,`No Treatment`=nt_yield,`Treatment 1`=t1_yield,`Treatment 2`=t2_yield)
+    rename(`Disease Free`=max_yield,`No Treatment`=nt_yield,`Treatment 1`=t1_yield,`Treatment 2`=t2_yield)
 }
