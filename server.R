@@ -202,111 +202,35 @@ shinyServer(function(input, output, session) {
       })
     
     output$tree_health <- renderPlotly({
-      # if there is no hover data, render the overall orchard yield, 
-      # otherwise render the tree growth path  
+      # if hovering, plot the tree's yield over time. Otherwise, plot the table
+      # row selected, otherwise render the overall orchard yield
       hoverData <- event_data("plotly_hover", source = "orchard_health")
-      selected <- input$mytable_rows_selected
+      selected_row <- input$mytable_rows_selected
       df <- tree_health_data()
-      if (!is.null(selected)) {
-        selected_row <- selected
-      } else {
-        selected_row <- -1
-      }
-      selected_net_returns <- (selected_row==2)
-      selected_return_to_treatment <- (selected_row==3)
-      selected_npv <- (selected_row==4)
+      
       if (!is.null(hoverData)) {
-        # Get individual tree yield
-        df <- df %>%
-          dplyr::select(-ends_with(c("net_returns", "realized_costs"))) %>%
-          filter(x==hoverData[["x"]] & y==hoverData[["y"]]) %>%
-          group_by(time) %>%
-          summarize(across(-c(x,y),~sum(.,na.rm = T))) %>%
-          pivot_longer(c(-time)) %>%
-          ggplot(aes(x=time,y=value,color=name)) +
-          geom_line() +
-          geom_point() +
-          geom_vline(xintercept = current_year(),linetype="dashed") +
-          geom_vline(xintercept = current_year(),linetype="dashed") +
-          scale_y_continuous(labels = label_comma()) +
-          labs(x="Year",y="Yield (lbs/tree)",title="Tree Yield Over Time") +
-          theme_bw(base_size = 15) +
-          theme(legend.title = element_blank(),legend.position = "bottom")
-      } else if (selected_net_returns){
-        df <- df %>% select(c(ends_with("net_returns"), time, x, y)) %>%
-          group_by(time) %>%
-          summarize(across(-c(x,y),~sum(.,na.rm = T))) %>%
-          ungroup() %>% 
-          rename(`Disease Free`=max_net_returns,`No Treatment`=nt_net_returns,`Treatment 1`=t1_net_returns,`Treatment 2`=t2_net_returns) %>%
-          pivot_longer(c(-time)) %>%
-          ggplot(aes(x=time, y=value, color=name)) +
-          geom_line() +
-          geom_point() +
-          geom_vline(xintercept = current_year(),linetype="dashed") +
-          scale_y_continuous(labels = label_comma()) +
-          labs(x="Year",y="Net returns ($)",title="Net Returns Over Time") +
-          theme_bw(base_size = 15) +
-          theme(legend.title = element_blank(),legend.position = "bottom") 
-      }  else if (selected_return_to_treatment){
-        df <- df %>% 
-          select(c(ends_with("net_returns"), time, x, y)) %>%
-          group_by(time) %>%
-          summarize(across(-c(x,y),~sum(.,na.rm = T))) %>%
-          ungroup() %>%
-          mutate(t1_net_returns=(t1_net_returns - nt_net_returns),
-                 t2_net_returns=(t2_net_returns - nt_net_returns)) %>%
-                 #across(c(t1_net_returns, t2_net_returns), dollar(., accuracy=1))) %>%
-          select(c(t1_net_returns, t2_net_returns, time)) %>%
-          rename(`Treatment 1`=t1_net_returns,`Treatment 2`=t2_net_returns) %>%
-          pivot_longer(c(-time)) %>%
-          ggplot(aes(x=time, y=value, color=name)) +
-          geom_line() +
-          geom_point() +
-          geom_vline(xintercept = current_year(),linetype="dashed") +
-          scale_y_continuous(labels = label_comma()) +
-          labs(x="Year",y="Returns to Treatment ($)",title="Returns to Treatment Over Time") +
-          theme_bw(base_size = 15) +
-          theme(legend.title = element_blank(),legend.position = "bottom") 
-      }  else if (selected_npv) {
-        df <- df %>% 
-          select(c(ends_with("net_returns"), time, x, y)) %>%
-          group_by(time) %>%
-          summarize(across(-c(x,y),~sum(.,na.rm = T))) %>%
-          ungroup() %>% 
-          mutate(t=time-rv$start_year, 
-                 npv_multiplier=((1+input$percent_interest/100.)**-t)) %>% 
-          arrange(desc(t)) %>% 
-          mutate(across(-c(time, npv_multiplier, t),~cumsum(.*npv_multiplier), .names="{.col}_npv")) %>%
-          select(c(ends_with("_npv"), time)) %>%
-          rename(`Disease Free`=max_net_returns_npv,`No Treatment`=nt_net_returns_npv,`Treatment 1`=t1_net_returns_npv,`Treatment 2`=t2_net_returns_npv) %>%
-          pivot_longer(c(-time)) %>%
-          ggplot(aes(x=time, y=value, color=name)) +
-          geom_line() +
-          geom_point() +
-          geom_vline(xintercept = current_year(),linetype="dashed") +
-          scale_y_continuous(labels = label_comma()) +
-          labs(x="Year",y="Net present value ($)",title="Net Present Value Over Time") +
-          theme_bw(base_size = 15) +
-          theme(legend.title = element_blank(),legend.position = "bottom") 
+        p <- plot_tree_yield(df, x_coord=hoverData[["x"]], y_coord=hoverData[["y"]])
+        
+      } else if (is.null(selected_row)) {
+        p <- plot_orchard_yield(df)
+        
+      } else if (selected_row == 2){
+        p <- plot_net_returns(df)
+        
+      }  else if (selected_row == 3){
+        p <- plot_returns_to_treatment(df)
+        
+      }  else if (selected_row == 4) {
+        p <- plot_npv(df, r=input$percent_interest/100., t0=rv$start_year)
+          
       } else {
-        df <- df %>%
-          dplyr::select(-ends_with(c("net_returns", "realized_costs"))) %>%
-          group_by(time) %>%
-          # Looking at thousands of dollars in profit
-          summarize(across(-c(x,y),~sum(./1000,na.rm = T))) %>%
-          ungroup() %>%
-          pivot_longer(-c(time)) %>%
-          ggplot(aes(x=time,y=value,color=name)) +
-          geom_line() +
-          geom_point() +
-          geom_vline(xintercept = current_year(),linetype="dashed") +
-          scale_y_continuous(labels = unit_format(unit = "K")) +
-          labs(x="Year",y="Yield (lbs/ac)",title="Orchard Yield Over Time") +
-          theme_bw(base_size = 15) +
-          theme(legend.title = element_blank(),legend.position = "bottom")
+        p <- plot_orchard_yield(df)
       }
-      #Plot of block yield over time
-      ggplotly(df)  %>%
+      
+      # Plot selected graph
+      (p + 
+        plot_line_at_current_year(current_year())) %>%
+        ggplotly()  %>%
         layout(legend = list(orientation = 'h', y=-0.5, fontsize=12)) #Need to split legend over two rows)
     })
     

@@ -228,3 +228,89 @@ simulateControlScenarios <- function(year_start,
     inner_join(t2, by = c("x", "y", "time")) %>%
     rename(`Disease Free`=max_yield,`No Treatment`=nt_yield,`Treatment 1`=t1_yield,`Treatment 2`=t2_yield)
 }
+
+
+############## Plotting Functions #####################
+
+plot_line_at_current_year <- function(currentyear) {
+  return(geom_vline(xintercept = currentyear,linetype="dashed"))
+}
+base_plot <- function(.data, ylab, title, ytickfn=label_comma()){
+  return(
+    ggplot(data=.data, aes(x=time,y=value,color=name)) +
+      geom_line() +
+      geom_point() +
+      scale_y_continuous(labels = ytickfn) +
+      labs(x="Year",y=ylab,title=title) +
+      theme_bw(base_size = 15) +
+      theme(legend.title = element_blank(),legend.position = "bottom")
+  )
+}
+
+plot_net_returns <- function(df) {
+  return(
+    df %>% select(c(ends_with("net_returns"), time, x, y)) %>%
+      group_by(time) %>%
+      summarize(across(-c(x,y),~sum(.,na.rm = T))) %>%
+      ungroup() %>% 
+      rename(`Disease Free`=max_net_returns,`No Treatment`=nt_net_returns,`Treatment 1`=t1_net_returns,`Treatment 2`=t2_net_returns) %>%
+      pivot_longer(c(-time)) %>%
+      base_plot(ylab="Net returns ($)", title="Net Returns Over Time")
+  )
+}
+
+plot_returns_to_treatment <- function(df) {
+  return(
+    df %>% 
+      select(c(ends_with("net_returns"), time, x, y)) %>%
+      group_by(time) %>%
+      summarize(across(-c(x,y),~sum(.,na.rm = T))) %>%
+      ungroup() %>%
+      mutate(t1_net_returns=(t1_net_returns - nt_net_returns),
+             t2_net_returns=(t2_net_returns - nt_net_returns)) %>%
+      select(c(t1_net_returns, t2_net_returns, time)) %>%
+      rename(`Treatment 1`=t1_net_returns,`Treatment 2`=t2_net_returns) %>%
+      pivot_longer(c(-time)) %>%
+      base_plot(ylab="Returns to Treatment ($)",title="Returns to Treatment Over Time")
+  )
+}
+
+plot_npv <- function(df, r, t0) {
+  return(
+    df %>% 
+      select(c(ends_with("net_returns"), time, x, y)) %>%
+      group_by(time) %>%
+      summarize(across(-c(x,y),~sum(.,na.rm = T))) %>%
+      ungroup() %>% 
+      mutate(t=time-t0, 
+             npv_multiplier=((1+r)**-t)) %>% 
+      arrange(desc(t)) %>% 
+      mutate(across(-c(time, npv_multiplier, t),~cumsum(.*npv_multiplier), .names="{.col}_npv")) %>%
+      select(c(ends_with("_npv"), time)) %>%
+      rename(`Disease Free`=max_net_returns_npv,`No Treatment`=nt_net_returns_npv,`Treatment 1`=t1_net_returns_npv,`Treatment 2`=t2_net_returns_npv) %>%
+      pivot_longer(c(-time)) %>%
+      base_plot(ylab="Net present value ($)",title="Net Present Value Over Time")
+  )
+}
+plot_orchard_yield <- function(df) {
+  return (
+    df %>%
+      dplyr::select(-ends_with(c("net_returns", "realized_costs"))) %>%
+      group_by(time) %>%
+      summarize(across(-c(x,y),~sum(./1000,na.rm = T))) %>%
+      pivot_longer(c(-time)) %>%
+      base_plot(ylab="Yield (lbs/ac)", title="Orchard Yield Over Time", ytickfn=unit_format(unit = "K"))
+  )
+}
+plot_tree_yield <- function(df, x_coord, y_coord){
+  return(
+    df %>%
+      dplyr::select(-ends_with(c("net_returns", "realized_costs"))) %>%
+      filter(x==x_coord & y==y_coord) %>%
+      group_by(time) %>%
+      summarize(across(-c(x,y),~sum(.,na.rm = T))) %>%
+      pivot_longer(c(-time)) %>%
+      base_plot(ylab="Yield (lbs/tree)",title="Tree Yield Over Time")
+  )
+}
+
