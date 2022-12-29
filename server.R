@@ -62,9 +62,10 @@ shinyServer(function(input, output, session) {
   
   ##### Dynamically rendering the simulation options ########
   # Initially untoggled panel elements
-  jqui_hide(ui="#disease_menu",    effect="blind")
-  jqui_hide(ui="#replanting_menu", effect="blind")
-  jqui_hide(ui="#treatments_menu", effect="blind")
+  jqui_hide(ui="#disease_menu",        effect="blind")
+  jqui_hide(ui="#replanting_menu",     effect="blind")
+  jqui_hide(ui="#treatments_menu",     effect="blind")
+  jqui_hide(ui="#tree_replant_inputs", effect="blind")
   
   is_hidden_menu_list <- list(
     disease=TRUE,
@@ -157,6 +158,22 @@ shinyServer(function(input, output, session) {
     years_orchard_is_replanted_string <- paste(get_replanting_years(with_added_start_year=TRUE), collapse=", ")
     return(paste0("Orchard is replanted ", get_n_cycles_possible(), " times in the year(s): ", years_orchard_is_replanted_string))
   })
+  
+  # If the replanting strategy is to only replant trees, hide the orchard replanting cost/options.
+  # If the replanting strategy is to replant the whole orchard, hide the tree cost options.
+  observeEvent(input$replanting_strategy, {
+    if (input$replanting_strategy == 'no_replant') {
+      jqui_hide(ui="#tree_replant_inputs",    effect="blind")
+      jqui_hide(ui="#orchard_replant_inputs", effect="blind")
+    } else if (input$replanting_strategy == 'tree_replant') {
+      jqui_show(ui="#tree_replant_inputs",    effect="blind")
+      jqui_hide(ui="#orchard_replant_inputs", effect="blind")
+    } else if (input$replanting_strategy == 'orchard_replant') {
+      jqui_hide(ui="#tree_replant_inputs",    effect="blind")
+      jqui_show(ui="#orchard_replant_inputs", effect="blind")
+    }
+  })
+
   
   # Run simulations
   t_disease_year <- reactive(input$start_disease_year - rv$start_year + 1)
@@ -306,8 +323,9 @@ shinyServer(function(input, output, session) {
                       mutate(`Disease Free`="") %>%
                       add_column(`Economic Result`="Net Present Value From Current Year ($/ac)", .before = 1),
                     #Row 5: operating duration
+                    # TODO: update with new cycle information
                     tree_health_aggregated_orchard_cost_yield_and_returns %>%
-                      filter((time > rv$start_year + TREE_FIRST_FULL_YIELD_YEAR) & (time < rv$start_year + t_replant_year())) %>%
+                      filter((time > rv$start_year + TREE_FIRST_FULL_YIELD_YEAR) & (time < rv$start_year + t_replant_year()[1])) %>%
                       # orders descending order so that the function cumsum sums starting from the end of the life of the orchard
                       arrange(desc(time)) %>%
                       mutate(across(ends_with("net_returns"), ~cumsum(.), .names = "{.col}_cum")) %>%
