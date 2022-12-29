@@ -14,7 +14,7 @@ library(DT)
 
 infoHoverLabel<- function(label, info_text=NA, link=NA){
   info_text <- ifelse(is.na(info_text), label, info_text)
-  link_part_one <- ifelse(is.na(link), '', paste0("<a href='", link, "'>"))
+  link_part_one <- ifelse(is.na(link), '', paste0("<a href='", link, "' target='_blank'>"))
   link_part_two <- ifelse(is.na(link), '', "</a>")
   return(shiny::HTML(
     paste(
@@ -85,7 +85,6 @@ ui <- tabsetPanel(
                                # Using infoHoverLabel from ui.R to add an informational tooltip
                                infoHoverLabel("Annual Production Cost ($/ac/yr)"),
                                value = 4885 + 1000),
-                  #uiOutput('annual_cost_res'),
                               dropdownButton(
                                 tags$h3("Production Cost Inputs"),
                                 numericInput("annual_cost_1",
@@ -144,16 +143,24 @@ ui <- tabsetPanel(
                    id="replanting_menu",
                    selectInput("replanting_strategy",
                                label=infoHoverLabel("Dead Tree Replanting Strategy"), 
-                               choices = list("Don't replant" = 'no_replant', 
-                                              "Replant dead trees every year" = 'tree_replant',
-                                              "Replant orchard at planned replanting year" = 'orchard_replant'),
-                               # "Replant dead trees every 10 years" = 'yr10_replant'),
+                               choices = list(
+                                 "Don't replant"                                                 = 'no_replant', 
+                                 "Replant dead trees every year"                                 = 'tree_replant',
+                                 "Replant orchard every replanting cycle length number of years" = 'orchard_replant'),
                                selected = 'orchard_replant'),
                    sliderInput("replant_year_orchard",
-                               infoHoverLabel("Planned Replanting Year"),
-                               min=2022, 
-                               max=2062,
-                               value = 2042),
+                      infoHoverLabel("Planned Replanting Year"),
+                      min=2022, 
+                      max=2062,
+                      value = 2042),
+                   sliderInput("replant_cycle_year_orchard",
+                               infoHoverLabel("Planned Replanting Cycle", 
+                                 "Number of years before replanting your orchard. If the simulation is set for 40 years and the replanting cycle length is 10 years, then the orchard will be replanted 4 times."),
+                               min=1, 
+                               max=40,
+                               value = 20),
+                   tags$b(infoHoverLabel("Number of times orchard is replanted")),
+                   textOutput("orchard_replants_count"),
                    numericInput("replant_cost_tree",
                                 infoHoverLabel("Tree Replanting Cost"),
                                 10),

@@ -49,6 +49,7 @@ shinyServer(function(input, output, session) {
       )
   }
   )
+  
   output$logo <- renderImage(
     expr=list(
       class= "center",
@@ -135,6 +136,13 @@ shinyServer(function(input, output, session) {
     }
     rv$prev_th <- input$time_horizon
     })
+  
+  # Render number of cycles conditional on cycle length and number of years in simulation
+  output$orchard_replants_count <- renderText({
+    n_cycles_possible <- floor((rv$end_year - rv$start_year)/input$replant_cycle_year_orchard)
+    years_replanted <- (1:n_cycles_possible*input$replant_cycle_year_orchard) + rv$start_year 
+    return(paste0("Orchard is replanted ", n_cycles_possible, " times in the year(s): ", paste(years_replanted, collapse=", ")))
+  })
   
   # Run simulations
   t_disease_year <- reactive(input$start_disease_year - rv$start_year + 1)
