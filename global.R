@@ -36,7 +36,7 @@ tree_sim <- function(o_rows=24, #Block dimension row
                      start_year=2022, #year simulation starts (only used to transform time at end)
                      replant_trees=FALSE, #Replant tree if the tree dies
                      replant_orchard=TRUE, #Replant orchard at replant year
-                     replant_year=20,  # Year the orchard will be replanted
+                     replant_years=c(20),  # Year the orchard will be replanted
                      replant_cost_orchard=3000, # Cost to replant the entire orchard
                      replant_cost_tree=10, #Cost to replant an individual tree
                      t_disease_year=1, #Year infection starts in the orchard
@@ -138,7 +138,7 @@ tree_sim <- function(o_rows=24, #Block dimension row
       }
       
       # Replant orchard if part of mitigation strategy
-      if((replant_orchard==TRUE) & (t==replant_year)){
+      if((replant_orchard==TRUE) & (t %in% replant_years)){
         age_shell[[t+1]] <- 1.0 # Replanted tree is 1 year old
         tree_shell[[t+1]] <- 1.0 # Replanted tree has initial yields
         shuffled_inf_mat <- matrix(sample(inf_mat), nrow=o_rows)
@@ -176,7 +176,7 @@ simulateControlScenarios <- function(year_start,
                                      replanting_strategy,
                                      replant_cost_tree,
                                      replant_cost_orchard,
-                                     replant_year,
+                                     replant_years,
                                      max_yield,
                                      output_price,
                                      annual_cost,
@@ -195,7 +195,7 @@ simulateControlScenarios <- function(year_start,
                                            t_treatment_year=t_treatment_year,
                                            replant_trees=(replanting_strategy=='tree_replant'),
                                            replant_orchard=(replanting_strategy=='orchard_replant'),
-                                           replant_year=replant_year,
+                                           replant_years=replant_years,
                                            replant_cost_tree=replant_cost_tree,
                                            replant_cost_orchard=replant_cost_orchard,
                                            max_yield=max_yield,

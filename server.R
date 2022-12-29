@@ -131,17 +131,31 @@ shinyServer(function(input, output, session) {
     
     fn <- partial(keep_year_proportion, old_start=old_start, old_end=old_end, start=start_yr, end=end_yr)
     
+    # Update all the ranges and values of the year sliders. 
+    # 1. Keep the same proportion of year value (if selected year is 1/3rd of the way through the simulation before, 1/3rd of the way now).
+    # 2. Update ranges to be the selected years of the simulation (time_horizon).
     for (slider in c("year","start_disease_year", "start_treatment_year", "replant_year_orchard")) {
       updateYearSliderInput(slider, start_yr, end_yr, fn)
     }
+    
+    # Update the maximum value of the replant cycle orchard to be the updated time_horizon
+    updateSliderInput("replant_cycle_year_orchard", max=end_yr - start_yr, session=session)
     rv$prev_th <- input$time_horizon
     })
   
   # Render number of cycles conditional on cycle length and number of years in simulation
+  get_n_cycles_possible <- function() {
+    floor((rv$end_year - rv$start_year)/input$replant_cycle_year_orchard)
+    }
+  get_replanting_years <- function(with_added_start_year=FALSE){
+    n_cycles_possible <- get_n_cycles_possible()
+    years_replanted <- (1:n_cycles_possible)*input$replant_cycle_year_orchard
+    to_add <- ifelse(with_added_start_year, rv$start_year, 0)
+    return(years_replanted + to_add)
+  }
   output$orchard_replants_count <- renderText({
-    n_cycles_possible <- floor((rv$end_year - rv$start_year)/input$replant_cycle_year_orchard)
-    years_replanted <- (1:n_cycles_possible*input$replant_cycle_year_orchard) + rv$start_year 
-    return(paste0("Orchard is replanted ", n_cycles_possible, " times in the year(s): ", paste(years_replanted, collapse=", ")))
+    years_orchard_is_replanted_string <- paste(get_replanting_years(with_added_start_year=TRUE), collapse=", ")
+    return(paste0("Orchard is replanted ", get_n_cycles_possible(), " times in the year(s): ", years_orchard_is_replanted_string))
   })
   
   # Run simulations
@@ -165,7 +179,7 @@ shinyServer(function(input, output, session) {
       output_price = output_price(),
       annual_cost = input$annual_cost,
       replanting_strategy = input$replanting_strategy,
-      replant_year = t_replant_year(),
+      replant_years = get_replanting_years(),
       replant_cost_tree = input$replant_cost_tree,
       replant_cost_orchard = input$replant_cost_orchard,
       inf_intro = input$inf_intro,
