@@ -241,6 +241,9 @@ shinyServer(function(input, output, session) {
         return(fig)
       })
     
+    
+    # This section prevents flickering between the tree and orchard yield plots
+    # as the user changes which tree they are mousing over.
     end_hover_time <- reactiveVal()
     most_recent_x_y_hover <- reactiveVal()
     hover_x_y_event <- reactiveVal()
@@ -255,7 +258,11 @@ shinyServer(function(input, output, session) {
       end_hover_time(Sys.time())
     })
     observe({
-      invalidateLater(50, session)
+      # The following line ensures that this chunk of code is called frequently,
+      # even without any underlying data changing (events, reactiveVals, etc.).
+      # This ensures that after unhovering on the yield graph, the plot is 
+      # updated to show the orchard yield plot.  
+      invalidateLater(50, session) 
       hover_and_unhover_events_are_not_null <- (!is.null(unhover_x_y_event()[["x"]]) && !is.null(hover_x_y_event()[["x"]]))
       # The two events have different x,y values until you are no longer hovering over the plot. 
       not_currently_hovering_on_plot <- ((unhover_x_y_event()[["x"]]==hover_x_y_event()[["x"]]) && (unhover_x_y_event()[["y"]]==hover_x_y_event()[["y"]]))
