@@ -70,10 +70,10 @@ ui <- tabsetPanel(
       
       
       fluidPage(
-      
+        tags$head(tags$link(rel = "shortcut icon", href = "favicon.ico")),
         tags$head(tags$style(HTML("table {table-layout: fixed;}"))),
         tags$head(tags$style(".datatables .display {margin-left: 0;}")),
-    
+        tags$script(src = "myscript.js"),
         # Application title
         titlePanel("Cytospora Decision Support Tool"),
     
