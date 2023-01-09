@@ -13,7 +13,6 @@ library(scales)
 library(shinyjqui)
 library(plotly)
 library(glue)
-source("ui.R")
 
 shinyServer(function(input, output, session) {
   #  First input that is also updated by other inputs e.g. sum(annual_cost_{n})
@@ -47,8 +46,8 @@ shinyServer(function(input, output, session) {
         effect = "blind", 
         duration = 0
       )
-  }
-  )
+  })
+  
   output$logo <- renderImage(
     expr=list(
       class= "center",
@@ -61,9 +60,10 @@ shinyServer(function(input, output, session) {
   
   ##### Dynamically rendering the simulation options ########
   # Initially untoggled panel elements
-  jqui_hide(ui="#disease_menu",    effect="blind")
-  jqui_hide(ui="#replanting_menu", effect="blind")
-  jqui_hide(ui="#treatments_menu", effect="blind")
+  jqui_hide(ui="#disease_menu",        effect="blind")
+  jqui_hide(ui="#replanting_menu",     effect="blind")
+  jqui_hide(ui="#treatments_menu",     effect="blind")
+  jqui_hide(ui="#tree_replant_inputs", effect="blind")
   
   is_hidden_menu_list <- list(
     disease=TRUE,
@@ -121,6 +121,15 @@ shinyServer(function(input, output, session) {
     start_year = NULL,
     end_year = NULL
   )
+  get_n_cycles_possible <- (function() {
+    floor((rv$end_year - rv$start_year)/input$replant_cycle_year_orchard)
+  })
+  get_replanting_years <- (function(with_added_start_year=FALSE){
+    n_cycles_possible <- get_n_cycles_possible()
+    years_replanted <- (1:n_cycles_possible)*input$replant_cycle_year_orchard
+    to_add <- ifelse(with_added_start_year, rv$start_year, 0)
+    return(years_replanted + to_add)
+  })
   observeEvent(input$time_horizon, {
     start_yr <- rv$start_year <- get_year_from_date(input$time_horizon[1])
     end_yr   <- rv$end_year <- get_year_from_date(input$time_horizon[2])
@@ -130,16 +139,50 @@ shinyServer(function(input, output, session) {
     
     fn <- partial(keep_year_proportion, old_start=old_start, old_end=old_end, start=start_yr, end=end_yr)
     
-    for (slider in c("year","start_disease_year", "start_treatment_year", "replant_year_orchard")) {
+    # Update all the ranges and values of the year sliders. 
+    # 1. Keep the same proportion of year value (if selected year is 1/3rd of the way through the simulation before, 1/3rd of the way now).
+    # 2. Update ranges to be the selected years of the simulation (time_horizon).
+    for (slider in c("year","start_disease_year", "start_treatment_year")) {
       updateYearSliderInput(slider, start_yr, end_yr, fn)
     }
+    
+    # Update the maximum value of the replant cycle orchard to be the updated time_horizon
+    updateSliderInput("replant_cycle_year_orchard", max=end_yr - start_yr, session=session)
     rv$prev_th <- input$time_horizon
+    
+    # removes commas in the year sliders
+    session$sendCustomMessage("updateSliders", 'test')
     })
+  observeEvent(input$year, session$sendCustomMessage("updateSliders", 'test'))
+  observeEvent(input$start_disease_year, session$sendCustomMessage("updateSliders", 'test'))
+  observeEvent(input$start_treatment_year, session$sendCustomMessage("updateSliders", 'test'))
+  
+  # Render number of cycles conditional on cycle length and number of years in simulation
+  
+  output$orchard_replants_count <- renderText({
+    years_orchard_is_replanted_string <- paste(get_replanting_years(with_added_start_year=TRUE), collapse=", ")
+    return(paste0("Orchard is replanted ", get_n_cycles_possible(), " times in the year(s): ", years_orchard_is_replanted_string))
+  })
+  
+  # If the replanting strategy is to only replant trees, hide the orchard replanting cost/options.
+  # If the replanting strategy is to replant the whole orchard, hide the tree cost options.
+  observeEvent(input$replanting_strategy, {
+    if (input$replanting_strategy == 'no_replant') {
+      jqui_hide(ui="#tree_replant_inputs",    effect="blind")
+      jqui_hide(ui="#orchard_replant_inputs", effect="blind")
+    } else if (input$replanting_strategy == 'tree_replant') {
+      jqui_show(ui="#tree_replant_inputs",    effect="blind")
+      jqui_hide(ui="#orchard_replant_inputs", effect="blind")
+    } else if (input$replanting_strategy == 'orchard_replant') {
+      jqui_hide(ui="#tree_replant_inputs",    effect="blind")
+      jqui_show(ui="#orchard_replant_inputs", effect="blind")
+    }
+  })
+
   
   # Run simulations
   t_disease_year <- reactive(input$start_disease_year - rv$start_year + 1)
   t_treatment_year <- reactive(input$start_treatment_year - rv$start_year + 1)
-  t_replant_year <- reactive(input$replant_year_orchard - rv$start_year + 1)
   current_year <- reactive(input$year)
   output_price <- reactive(input$output_price)
   
@@ -148,7 +191,7 @@ shinyServer(function(input, output, session) {
   tree_health_data <- reactive({
     simulateControlScenarios(
       year_start = rv$start_year,
-      year_end = rv$end_year,
+      year_end = rv$end_year + 1,
       t_disease_year = t_disease_year(),
       t_treatment_year = t_treatment_year(),
       disease_spread_rate = input$disease_spread_rate/100, # function expects a percentage (fraction)
@@ -157,7 +200,7 @@ shinyServer(function(input, output, session) {
       output_price = output_price(),
       annual_cost = input$annual_cost,
       replanting_strategy = input$replanting_strategy,
-      replant_year = t_replant_year(),
+      replant_years = get_replanting_years(),
       replant_cost_tree = input$replant_cost_tree,
       replant_cost_orchard = input$replant_cost_orchard,
       inf_intro = input$inf_intro,
@@ -169,21 +212,29 @@ shinyServer(function(input, output, session) {
   
     output$orchard_health <- renderPlotly({
       #Raster blocks with color indicating disease spread
-      data <- tree_health_data() %>%
+      data2 <<- tree_health_data() %>%
         dplyr::select(-ends_with(c("net_returns", "realized_costs"))) %>%
         dplyr::filter(time==current_year()) %>%
-        #When the yield is all zero, the heatmap turns grey. I add a tiny amount of noise to keep it green.
-        mutate(across(-c(x,y,time),~ifelse(`Disease Free`>0, ./`Disease Free`, 1-runif(n(),max=1e-10)))) %>%
+        mutate(across(-c(x,y,time),~ifelse(`Disease Free`>0, ./`Disease Free`, 1))) %>%
         dplyr::select(-`Disease Free`) %>%
         pivot_longer(-c(x,y,time)) %>%
         mutate(yield=ifelse(value<0,0,value))
         
         # Use ggplot to plot the yield heatmap
-        plot <- ggplot(data, aes(x=x,y=y,fill=yield, customdata=name)) +
+        plot <- data2 %>%
+          # The following lines ensure that if all of the yields are the same then 
+          # the plot doesn't turn grey (consequence of plotly converting the colorscale)
+          add_row(x=-2, y=1, yield=0, name='No Treatment') %>%
+          add_row(x=-1, y=1, yield=1, name='No Treatment') %>%
+          add_row(x=-2, y=1, yield=0, name='Treatment 1') %>%
+          add_row(x=-1, y=1, yield=1, name='Treatment 1') %>%
+          add_row(x=-2, y=1, yield=0, name='Treatment 2') %>%
+          add_row(x=-1, y=1, yield=1, name='Treatment 2') %>%
+          ggplot(aes(x=x,y=y,fill=yield)) +
           geom_tile(size=.1,show.legend = F) +
-          scale_fill_gradient(name="Tree Health",low = "red", high = "green",limit=c(0,1)) +
-          scale_x_continuous(name = "Column")+#,breaks = seq.int(1,24,2),minor_breaks = NULL) +
-          scale_y_continuous(name = "Row")+#,breaks = seq.int(1,24,2),minor_breaks = NULL) +
+          scale_fill_gradient(name="Tree Health",low = "red", high = "green", limits=c(0,1), na.value="green") +
+          scale_x_continuous(name = "Column") +
+          scale_y_continuous(name = "Row") +
           theme_bw(base_size = 15) +
           labs(title = "Orchard Health") +
           facet_wrap(~name,nrow = 1)
@@ -191,25 +242,65 @@ shinyServer(function(input, output, session) {
         # Transform into a plotly plot
         fig <- ggplotly(plot, source='orchard_health') %>%
           plotly::layout(xaxis = list(label="column"),
-                         yaxis = list(constrain="domain", constraintoward='top', label="row"),
+                         yaxis = list(constrain="domain", range=c(1, 24), constraintoward='top', label="row"),
                          hovermode='closest') %>%
           # style function updates all traces with the specified options
           style(hovertemplate="Tree Yield: %{z:.0%}<extra></extra>") %>%
           # makes the plotly hover event accessible to plot the individual tree yields
-          event_register("plotly_hover")
+          event_register("plotly_hover") %>% 
+          event_register("plotly_unhover")
         
+        # This code zooms into the actual data (ignoring the two added rows) and
+        # prevents zooming the x axis to see the added rows
+        for (axis in c('xaxis', 'xaxis2', 'xaxis3')){
+          fig$x$layout[[axis]]$range <- c(1, 24)
+          fig$x$layout[[axis]]$fixedrange <- TRUE
+        }
         return(fig)
       })
     
+    
+    # This section prevents flickering between the tree and orchard yield plots
+    # as the user changes which tree they are mousing over.
+    end_hover_time <- reactiveVal()
+    most_recent_x_y_hover <- reactiveVal()
+    hover_x_y_event <- reactiveVal()
+    unhover_x_y_event <- reactiveVal()
+    
+    observeEvent(event_data("plotly_hover", source = "orchard_health"), {
+      hover_x_y_event(event_data("plotly_hover", source = "orchard_health"))
+      most_recent_x_y_hover(list(x=hover_x_y_event()[["x"]], y=hover_x_y_event()[["y"]]))
+    })
+    observeEvent(event_data("plotly_unhover", source = "orchard_health"), {
+      unhover_x_y_event(event_data("plotly_unhover", source = "orchard_health"))
+      end_hover_time(Sys.time())
+    })
+    observe({
+      # The following line ensures that this chunk of code is called every .5 secs,
+      # even without any underlying data changing (events, reactiveVals, etc.).
+      # This ensures that after unhovering on the yield graph, the plot is 
+      # updated to show the orchard yield plot.  
+      invalidateLater(500, session) 
+      hover_and_unhover_events_are_not_null <- (!is.null(unhover_x_y_event()[["x"]]) && !is.null(hover_x_y_event()[["x"]]))
+      # The two events have different x,y values until you are no longer hovering over the plot. 
+      not_currently_hovering_on_plot <- ((unhover_x_y_event()[["x"]]==hover_x_y_event()[["x"]]) && (unhover_x_y_event()[["y"]]==hover_x_y_event()[["y"]]))
+      if (hover_and_unhover_events_are_not_null && not_currently_hovering_on_plot) { 
+        if (!is.null(end_hover_time()) && ((Sys.time() - end_hover_time()) > 0.5)){ # more than half a second after we stopped hovering
+          most_recent_x_y_hover(NULL)
+          end_hover_time(NULL)
+        }
+      }
+      session$sendCustomMessage("updateSliders", 'test') # this line updates the year sliders regularly
+    })
+    
     output$tree_health <- renderPlotly({
-      # if hovering, plot the tree's yield over time. Otherwise, plot the table
-      # row selected, otherwise render the overall orchard yield
-      hoverData <- event_data("plotly_hover", source = "orchard_health")
+      # if hovering, plot the tree's yield over time. If not hovering, plot the
+      # table row selected, otherwise render the overall orchard yield.
       selected_row <- input$mytable_rows_selected
       df <- tree_health_data()
       
-      if (!is.null(hoverData)) {
-        p <- plot_tree_yield(df, x_coord=hoverData[["x"]], y_coord=hoverData[["y"]])
+      if (!is.null(most_recent_x_y_hover())) {
+        p <- plot_tree_yield(df, x_coord=most_recent_x_y_hover()[["x"]], y_coord=most_recent_x_y_hover()[["y"]])
         
       } else if (is.null(selected_row)) {
         p <- plot_orchard_yield(df)
@@ -242,7 +333,7 @@ shinyServer(function(input, output, session) {
 
       first_six_years_max_net_returns <- (
         tree_health_aggregated_orchard_cost_yield_and_returns %>%
-        select(time, max_net_returns, max_realized_costs) %>% 
+        select(time, max_net_returns) %>% 
         filter(time <= rv$start_year + TREE_FIRST_FULL_YIELD_YEAR) %>% 
         summarize(value=sum(max_net_returns))
       )$value
@@ -285,7 +376,7 @@ shinyServer(function(input, output, session) {
                       add_column(`Economic Result`="Net Present Value From Current Year ($/ac)", .before = 1),
                     #Row 5: operating duration
                     tree_health_aggregated_orchard_cost_yield_and_returns %>%
-                      filter((time > rv$start_year + TREE_FIRST_FULL_YIELD_YEAR) & (time < rv$start_year + t_replant_year())) %>%
+                      filter((time > rv$start_year + TREE_FIRST_FULL_YIELD_YEAR) & (time < rv$start_year + get_replanting_years()[1])) %>%
                       # orders descending order so that the function cumsum sums starting from the end of the life of the orchard
                       arrange(desc(time)) %>%
                       mutate(across(ends_with("net_returns"), ~cumsum(.), .names = "{.col}_cum")) %>%
