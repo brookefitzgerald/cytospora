@@ -144,9 +144,9 @@ ui <- tabsetPanel(
                    selectInput("replanting_strategy",
                                label=infoHoverLabel("Dead Tree Replanting Strategy"), 
                                choices = list(
-                                 "Don't replant"                                                 = 'no_replant', 
-                                 "Replant dead trees every year"                                 = 'tree_replant',
-                                 "Replant orchard every replanting cycle length number of years" = 'orchard_replant'),
+                                 "Don't replant"                                                  = 'no_replant', 
+                                 "Replant dead trees every year"                                  = 'tree_replant',
+                                 "Replant orchard every planned replanting cycle number of years" = 'orchard_replant'),
                                selected = 'orchard_replant'),
                    tags$div(
                      id="orchard_replant_inputs",

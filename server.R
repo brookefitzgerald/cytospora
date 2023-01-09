@@ -215,15 +215,22 @@ shinyServer(function(input, output, session) {
       data2 <<- tree_health_data() %>%
         dplyr::select(-ends_with(c("net_returns", "realized_costs"))) %>%
         dplyr::filter(time==current_year()) %>%
-        # When the yield is all the same, the heatmap turns grey. I add a tiny amount of
-        # noise to keep it green (subtracting to stay within the red-green 0-1 boundary). 
         mutate(across(-c(x,y,time),~ifelse(`Disease Free`>0, ./`Disease Free`, 1))) %>%
         dplyr::select(-`Disease Free`) %>%
         pivot_longer(-c(x,y,time)) %>%
         mutate(yield=ifelse(value<0,0,value))
         
         # Use ggplot to plot the yield heatmap
-        plot <- ggplot(data2, aes(x=x,y=y,fill=yield)) +
+        plot <- data2 %>%
+          # The following lines ensure that if all of the yields are the same then 
+          # the plot doesn't turn grey (consequence of plotly converting the colorscale)
+          add_row(x=-2, y=1, yield=0, name='No Treatment') %>%
+          add_row(x=-1, y=1, yield=1, name='No Treatment') %>%
+          add_row(x=-2, y=1, yield=0, name='Treatment 1') %>%
+          add_row(x=-1, y=1, yield=1, name='Treatment 1') %>%
+          add_row(x=-2, y=1, yield=0, name='Treatment 2') %>%
+          add_row(x=-1, y=1, yield=1, name='Treatment 2') %>%
+          ggplot(aes(x=x,y=y,fill=yield)) +
           geom_tile(size=.1,show.legend = F) +
           scale_fill_gradient(name="Tree Health",low = "red", high = "green", limits=c(0,1), na.value="green") +
           scale_x_continuous(name = "Column") +
@@ -235,7 +242,7 @@ shinyServer(function(input, output, session) {
         # Transform into a plotly plot
         fig <- ggplotly(plot, source='orchard_health') %>%
           plotly::layout(xaxis = list(label="column"),
-                         yaxis = list(constrain="domain", constraintoward='top', label="row"),
+                         yaxis = list(constrain="domain", range=c(1, 24), constraintoward='top', label="row"),
                          hovermode='closest') %>%
           # style function updates all traces with the specified options
           style(hovertemplate="Tree Yield: %{z:.0%}<extra></extra>") %>%
@@ -243,6 +250,12 @@ shinyServer(function(input, output, session) {
           event_register("plotly_hover") %>% 
           event_register("plotly_unhover")
         
+        # This code zooms into the actual data (ignoring the two added rows) and
+        # prevents zooming the x axis to see the added rows
+        for (axis in c('xaxis', 'xaxis2', 'xaxis3')){
+          fig$x$layout[[axis]]$range <- c(1, 24)
+          fig$x$layout[[axis]]$fixedrange <- TRUE
+        }
         return(fig)
       })
     
