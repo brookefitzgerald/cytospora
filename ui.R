@@ -169,7 +169,7 @@ ui <- tabsetPanel(
                      
                      radioButtons("replant_tree_block_size",
                                   infoHoverLabel("Number of additional surrounding trees to replant",
-                                                 "Length of square surrounding each dead tree that will be removed. Block size of two will mean 25 trees will be removed, two to the left and right of the tree, two up and down, and all of the trees in between."),
+                                                 "Length of square surrounding each dead tree that will be removed. Block size of two will mean 25 total trees will be removed, two to the left and right of the tree, two up and down, and all of the trees in between."),
                                   choices=c(
                                    "0"=0,
                                    "1 (replant 8 extra trees)"=1,
