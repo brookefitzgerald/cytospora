@@ -165,10 +165,20 @@ ui <- tabsetPanel(
                      id="tree_replant_inputs",
                      numericInput("replant_cost_tree",
                                   infoHoverLabel("Tree Replanting Cost"),
-                                  10)
+                                  10),
+                     
+                     radioButtons("replant_tree_block_size",
+                                  infoHoverLabel("Number of additional surrounding trees to replant",
+                                                 "Length of square surrounding each dead tree that will be removed. Block size of two will mean 25 trees will be removed, two to the left and right of the tree, two up and down, and all of the trees in between."),
+                                  choices=c(
+                                   "0"=0,
+                                   "1 (replant 8 extra trees)"=1,
+                                   "2 (replant 24 extra trees)"=2,
+                                   "3 (replant 48 extra trees)"=3,
+                                   "4 (replant 80 extra trees)"=4)
                    ),
                    actionButton("replanting_menu_hide", "Close menu"),
-                 ),
+                 )),
                  tags$br(),
                  tags$br(),
                  actionButton("treatments_menu_toggle", menuIconLabel("Treatment Settings", id_prefix="treatments"), class="menu"),
