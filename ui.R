@@ -176,9 +176,9 @@ ui <- tabsetPanel(
                                    "2 (replant 24 extra trees)"=2,
                                    "3 (replant 48 extra trees)"=3,
                                    "4 (replant 80 extra trees)"=4)
-                   ),
+                   )),
                    actionButton("replanting_menu_hide", "Close menu"),
-                 )),
+                 ),
                  tags$br(),
                  tags$br(),
                  actionButton("treatments_menu_toggle", menuIconLabel("Treatment Settings", id_prefix="treatments"), class="menu"),
