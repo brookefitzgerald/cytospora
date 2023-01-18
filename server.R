@@ -185,8 +185,8 @@ shinyServer(function(input, output, session) {
   t_treatment_year <- reactive(input$start_treatment_year - rv$start_year + 1)
   current_year <- reactive(input$year)
   output_price <- reactive(input$output_price)
-  
   n_trees_in_orchard <- 576 # 24*24, number of trees planted in one acre
+  max_yield <- reactive(input$max_yield/n_trees_in_orchard)
   
   tree_health_data <- reactive({
     simulateControlScenarios(
@@ -203,6 +203,7 @@ shinyServer(function(input, output, session) {
       replant_years = get_replanting_years(),
       replant_cost_tree = input$replant_cost_tree,
       replant_cost_orchard = input$replant_cost_orchard,
+      replant_tree_block_size=as.numeric(input$replant_tree_block_size),
       inf_intro = input$inf_intro,
       control1 = input$control1/100,
       t1_cost = input$t1_cost,
@@ -212,10 +213,10 @@ shinyServer(function(input, output, session) {
   
     output$orchard_health <- renderPlotly({
       #Raster blocks with color indicating disease spread
-      data2 <<- tree_health_data() %>%
+      data2 <- tree_health_data() %>%
         dplyr::select(-ends_with(c("net_returns", "realized_costs"))) %>%
         dplyr::filter(time==current_year()) %>%
-        mutate(across(-c(x,y,time),~ifelse(`Disease Free`>0, ./`Disease Free`, 1))) %>%
+        mutate(across(-c(x,y,time), ~./max_yield())) %>%
         dplyr::select(-`Disease Free`) %>%
         pivot_longer(-c(x,y,time)) %>%
         mutate(yield=ifelse(value<0,0,value))
@@ -245,7 +246,7 @@ shinyServer(function(input, output, session) {
                          yaxis = list(constrain="domain", range=c(1, 24), constraintoward='top', label="row"),
                          hovermode='closest') %>%
           # style function updates all traces with the specified options
-          style(hovertemplate="Tree Yield: %{z:.0%}<extra></extra>") %>%
+          style(hovertemplate="Tree Yield: %{z:.0%} of maximum yield<extra></extra>") %>%
           # makes the plotly hover event accessible to plot the individual tree yields
           event_register("plotly_hover") %>% 
           event_register("plotly_unhover")
