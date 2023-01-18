@@ -216,7 +216,7 @@ shinyServer(function(input, output, session) {
       data2 <- tree_health_data() %>%
         dplyr::select(-ends_with(c("net_returns", "realized_costs"))) %>%
         dplyr::filter(time==current_year()) %>%
-        mutate(across(-c(x,y,time), ~./max_yield())) %>%
+        mutate(across(-c(x,y,time), ~ifelse(`Disease Free`>0, ./`Disease Free`, 1))) %>%
         dplyr::select(-`Disease Free`) %>%
         pivot_longer(-c(x,y,time)) %>%
         mutate(yield=ifelse(value<0,0,value))
@@ -339,6 +339,8 @@ shinyServer(function(input, output, session) {
         summarize(value=sum(max_net_returns))
       )$value
       
+      
+      
       DT::datatable(bind_rows(
                     #Row 1: yield
                     tree_health_aggregated_orchard_cost_yield_and_returns %>%
@@ -386,6 +388,7 @@ shinyServer(function(input, output, session) {
                                 `Treatment 2`=as.character(first(time[t2_net_returns_cum >= first_six_years_max_net_returns])),
                                 `No Treatment`=as.character(first(time[nt_net_returns_cum >= first_six_years_max_net_returns])),
                                 `Disease Free`=as.character(first(time[max_net_returns_cum >= first_six_years_max_net_returns]))) %>%
+                      mutate(across(everything(), ~ifelse(input$replanting_strategy=='tree_replant', "", .))) %>%
                       add_column(`Economic Result`="Optimal First Replanting Year",.before = 1),
                     ),
                     options = list(dom = 't',

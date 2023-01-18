@@ -1,6 +1,4 @@
 Shiny.addCustomMessageHandler('updateSliders', function(e) {
-  console.log(e);
-  console.log('testing!');
   $('.irs-min').each(function() {
     this.textContent = this.textContent.replace(',', '');
   });

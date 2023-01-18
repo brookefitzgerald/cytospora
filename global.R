@@ -76,7 +76,7 @@ tree_sim <- function(o_rows=24, #Block dimension row
   
   grow_trees <- function(tree_age_matrix){
     #Returns tree growth as a function of age for the given maximum yield
-    grow_tree_function(tree_age_matrix, max_yield=max_yield)
+    grow_tree_function(tree_age_matrix, max_yield=max_yield, tree_end_year=TH)
   }
   
   #Disease spread matrix 
