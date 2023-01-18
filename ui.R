@@ -53,7 +53,7 @@ ui <- tabsetPanel(
           width=6,
           tags$p("Welcome to CSU's Disease Decision Support Tool. This tool is meant
                to aid peach farmers understand the economic impact of the cytospora 
-               disease and control strategies."),
+               disease and control strategies.", class="centertext"),
         )
       ),
       tags$div(
@@ -138,49 +138,6 @@ ui <- tabsetPanel(
                  ),
                  tags$br(),
                  tags$br(),
-                 actionButton("replanting_menu_toggle", menuIconLabel("Replanting Settings", id_prefix="replanting"), class="menu"),
-                 tags$div(
-                   id="replanting_menu",
-                   selectInput("replanting_strategy",
-                               label=infoHoverLabel("Dead Tree Replanting Strategy"), 
-                               choices = list(
-                                 "Don't replant"                                                  = 'no_replant', 
-                                 "Replant dead trees every year"                                  = 'tree_replant',
-                                 "Replant orchard every planned replanting cycle number of years" = 'orchard_replant'),
-                               selected = 'orchard_replant'),
-                   tags$div(
-                     id="orchard_replant_inputs",
-                     sliderInput("replant_cycle_year_orchard",
-                                 infoHoverLabel("Planned Replanting Cycle", 
-                                                "Number of years before replanting your orchard. If the simulation is set for 40 years and the replanting cycle length is 10 years, then the orchard will be replanted 4 times."),
-                                 min=1, 
-                                 max=40,
-                                 value = 20),
-                     textOutput("orchard_replants_count"),
-                     numericInput("replant_cost_orchard",
-                                  infoHoverLabel("Orchard Replanting Cost"),
-                                  5500)
-                   ),
-                   tags$div(
-                     id="tree_replant_inputs",
-                     numericInput("replant_cost_tree",
-                                  infoHoverLabel("Tree Replanting Cost"),
-                                  10),
-                     
-                     radioButtons("replant_tree_block_size",
-                                  infoHoverLabel("Number of additional surrounding trees to replant",
-                                                 "Length of square surrounding each dead tree that will be removed. Block size of two will mean 25 total trees will be removed, two to the left and right of the tree, two up and down, and all of the trees in between."),
-                                  choices=c(
-                                   "0"=0,
-                                   "1 (replant 8 extra trees)"=1,
-                                   "2 (replant 24 extra trees)"=2,
-                                   "3 (replant 48 extra trees)"=3,
-                                   "4 (replant 80 extra trees)"=4)
-                   )),
-                   actionButton("replanting_menu_hide", "Close menu"),
-                 ),
-                 tags$br(),
-                 tags$br(),
                  actionButton("treatments_menu_toggle", menuIconLabel("Treatment Settings", id_prefix="treatments"), class="menu"),
                  tags$div(
                    id="treatments_menu",
@@ -201,7 +158,50 @@ ui <- tabsetPanel(
                                 infoHoverLabel("Treatment 2 Cost ($/ac/yr)", "Treatment 2 cost per acre per year after `Year Treatment Starts`. Note that more effective treatments are likely more expensive."),
                                 value=650),
                    actionButton("treatments_menu_hide", "Close menu"),
-                 )
+                 ),
+                tags$br(),
+                tags$br(),
+                actionButton("replanting_menu_toggle", menuIconLabel("Replanting Settings", id_prefix="replanting"), class="menu"),
+                tags$div(
+                  id="replanting_menu",
+                  selectInput("replanting_strategy",
+                              label=infoHoverLabel("Dead Tree Replanting Strategy"), 
+                              choices = list(
+                                "Don't replant"                                                  = 'no_replant', 
+                                "Replant dead trees every year"                                  = 'tree_replant',
+                                "Replant orchard every planned replanting cycle number of years" = 'orchard_replant'),
+                              selected = 'orchard_replant'),
+                  tags$div(
+                    id="orchard_replant_inputs",
+                    sliderInput("replant_cycle_year_orchard",
+                                infoHoverLabel("Planned Replanting Cycle", 
+                                               "Number of years before replanting your orchard. If the simulation is set for 40 years and the replanting cycle length is 10 years, then the orchard will be replanted 4 times."),
+                                min=1, 
+                                max=40,
+                                value = 20),
+                    textOutput("orchard_replants_count"),
+                    numericInput("replant_cost_orchard",
+                                 infoHoverLabel("Orchard Replanting Cost"),
+                                 5500)
+                  ),
+                  tags$div(
+                    id="tree_replant_inputs",
+                    numericInput("replant_cost_tree",
+                                 infoHoverLabel("Tree Replanting Cost"),
+                                 10),
+                    
+                    radioButtons("replant_tree_block_size",
+                                 infoHoverLabel("Number of additional surrounding trees to replant",
+                                                "Length of square surrounding each dead tree that will be removed. Block size of two will mean 25 total trees will be removed, two to the left and right of the tree, two up and down, and all of the trees in between."),
+                                 choices=c(
+                                   "0"=0,
+                                   "1 (replant 8 extra trees)"=1,
+                                   "2 (replant 24 extra trees)"=2,
+                                   "3 (replant 48 extra trees)"=3,
+                                   "4 (replant 80 extra trees)"=4)
+                    )),
+                  actionButton("replanting_menu_hide", "Close menu"),
+                )
             ),
             column(2,
                sliderInput("time_horizon", 
