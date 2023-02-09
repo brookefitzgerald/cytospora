@@ -117,7 +117,10 @@ tree_sim <- function(o_rows=24, #Block dimension row
     
     #Grow trees subject to damage
     tree_shell[[t+1]] <- tree_shell[[t]] + grow_trees(age_shell[[t]]) - disease_shell[,,t]
+    
+    # Treatment costs for all years that we are treating the disease
     control_effort <- ifelse(t >= t_treatment_year, activated_control_effort, 0.0)
+    cost_shell[[t+1]] <- cost_shell[[t+1]] + ifelse(control_effort==0.0, 0, control_cost)
     
     #Propagate disease if disease spread has started
     if (t >= t_disease_year){
@@ -126,7 +129,6 @@ tree_sim <- function(o_rows=24, #Block dimension row
       #Disease is mitigated if present
       disease_shell[,,t+1] <- disease_shell[,,t+1]*(1-control_effort)
       disease_shell[,,t+1] <- pmax(zeros(o_rows, o_cols), disease_shell[,,t+1]) # sets any negatives to zero
-      cost_shell[[t+1]] <- cost_shell[[t+1]] + ifelse(control_effort==0.0, 0, control_cost)
     }
     
     #Replace dead trees if part of mitigation strategy
@@ -163,7 +165,7 @@ tree_sim <- function(o_rows=24, #Block dimension row
                          function(tree, cntr, yearly_cost){
                            # subtracting one from the yield so that the initial yield is truly 0
                            # (non-zero yield is initially necessary for the growth function to work)
-                           bind_cols(expand_grid(x=c(1:o_cols),y=c(1:o_rows)),yield=as.vector(tree)-1) %>%
+                           bind_cols(expand_grid(x=c(1:o_cols),y=c(1:o_rows)),yield=pmax(as.vector(tree)-1, integer(length(as.vector(tree))))) %>%
                              add_column(
                                time=start_year + cntr - 1,
                                realized_costs=yearly_cost/numel(orc_mat),
@@ -297,7 +299,9 @@ plot_npv <- function(df, r, t0) {
       arrange(desc(t)) %>% 
       mutate(across(-c(time, npv_multiplier, t),~cumsum(.*npv_multiplier), .names="{.col}_npv")) %>%
       select(c(ends_with("_npv"), time)) %>%
-      rename(`Disease Free`=max_net_returns_npv,`No Treatment`=nt_net_returns_npv,`Treatment 1`=t1_net_returns_npv,`Treatment 2`=t2_net_returns_npv) %>%
+      select(-starts_with("max")) %>% 
+      # TODO: change color of traces to be the same as the other plots
+      rename(`No Treatment`=nt_net_returns_npv,`Treatment 1`=t1_net_returns_npv,`Treatment 2`=t2_net_returns_npv) %>%
       pivot_longer(c(-time)) %>%
       base_plot(ylab="Net present value ($)",title="Net Present Value Over Time")
   )

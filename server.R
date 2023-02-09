@@ -13,6 +13,7 @@ library(scales)
 library(shinyjqui)
 library(plotly)
 library(glue)
+library(tibbletime)
 
 shinyServer(function(input, output, session) {
   #  First input that is also updated by other inputs e.g. sum(annual_cost_{n})
@@ -122,13 +123,20 @@ shinyServer(function(input, output, session) {
     end_year = NULL
   )
   get_n_cycles_possible <- (function() {
-    floor((rv$end_year - rv$start_year)/input$replant_cycle_year_orchard)
+    n_cycles <- floor((rv$end_year - rv$start_year)/input$replant_cycle_year_orchard)
+    ifelse(n_cycles==0, 1, n_cycles)
   })
   get_replanting_years <- (function(with_added_start_year=FALSE){
-    n_cycles_possible <- get_n_cycles_possible()
-    years_replanted <- (1:n_cycles_possible)*input$replant_cycle_year_orchard
-    to_add <- ifelse(with_added_start_year, rv$start_year, 0)
-    return(years_replanted + to_add)
+    if (input$replanting_strategy %in% c('no_replant', 'tree_replant')) {
+      replanting_years <- c(rv$end_year - rv$start_year)
+    } else {
+      n_cycles_possible <- get_n_cycles_possible()
+      years_replanted <- (1:n_cycles_possible)*input$replant_cycle_year_orchard
+      to_add <- ifelse(with_added_start_year, rv$start_year, 0)
+      replanting_years <- years_replanted + to_add
+    }
+    
+    return(replanting_years)
   })
   observeEvent(input$time_horizon, {
     start_yr <- rv$start_year <- get_year_from_date(input$time_horizon[1])
@@ -338,8 +346,7 @@ shinyServer(function(input, output, session) {
         filter(time <= rv$start_year + TREE_FIRST_FULL_YIELD_YEAR) %>% 
         summarize(value=sum(max_net_returns))
       )$value
-      
-      
+      sum_roll_6 <- rollify(sum, window = 6)
       
       DT::datatable(bind_rows(
                     #Row 1: yield
@@ -379,16 +386,16 @@ shinyServer(function(input, output, session) {
                       add_column(`Economic Result`="Net Present Value From Current Year ($/ac)", .before = 1),
                     #Row 5: operating duration
                     tree_health_aggregated_orchard_cost_yield_and_returns %>%
-                      filter((time > rv$start_year + TREE_FIRST_FULL_YIELD_YEAR) & (time < rv$start_year + get_replanting_years()[1])) %>%
+                      filter((time > (rv$start_year + TREE_FIRST_FULL_YIELD_YEAR)) & (time < (rv$start_year + get_replanting_years()[1]))) %>%
                       # orders descending order so that the function cumsum sums starting from the end of the life of the orchard
                       arrange(desc(time)) %>%
-                      mutate(across(ends_with("net_returns"), ~cumsum(.), .names = "{.col}_cum")) %>%
+                      mutate(across(ends_with("net_returns"), ~coalesce(sum_roll_6(.), cumsum(.)), .names = "{.col}_cum")) %>%
                       # chooses the first time the expected profit from the net returns is outweighed by the replanted yield
-                      summarise(`Treatment 1`=as.character(first(time[t1_net_returns_cum >= first_six_years_max_net_returns])),
-                                `Treatment 2`=as.character(first(time[t2_net_returns_cum >= first_six_years_max_net_returns])),
-                                `No Treatment`=as.character(first(time[nt_net_returns_cum >= first_six_years_max_net_returns])),
-                                `Disease Free`=as.character(first(time[max_net_returns_cum >= first_six_years_max_net_returns]))) %>%
-                      mutate(across(everything(), ~ifelse(input$replanting_strategy=='tree_replant', "", .))) %>%
+                      summarise(`Treatment 1` = as.character(first(time[t1_net_returns_cum  >= first_six_years_max_net_returns]) + 1),
+                                `Treatment 2` = as.character(first(time[t2_net_returns_cum  >= first_six_years_max_net_returns]) + 1),
+                                `No Treatment`= as.character(first(time[nt_net_returns_cum  >= first_six_years_max_net_returns]) + 1),
+                                `Disease Free`= as.character(first(time[max_net_returns_cum >= first_six_years_max_net_returns]) + 1)) %>%
+                     # mutate(across(everything(), ~ifelse(input$replanting_strategy=='tree_replant', "", .))) %>%
                       add_column(`Economic Result`="Optimal First Replanting Year",.before = 1),
                     ),
                     options = list(dom = 't',

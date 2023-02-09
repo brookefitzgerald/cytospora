@@ -73,7 +73,9 @@ ui <- tabsetPanel(
         tags$head(tags$link(rel = "shortcut icon", href = "favicon.ico")),
         tags$head(tags$style(HTML("table {table-layout: fixed;}"))),
         tags$head(tags$style(".datatables .display {margin-left: 0;}")),
+        tags$head(includeHTML("www/google-analytics.html")),
         tags$script(src = "myscript.js"),
+        
         # Application title
         titlePanel("Cytospora Decision Support Tool"),
     
@@ -180,6 +182,7 @@ ui <- tabsetPanel(
                                 max=40,
                                 value = 20),
                     textOutput("orchard_replants_count"),
+                    tags$br(),
                     numericInput("replant_cost_orchard",
                                  infoHoverLabel("Orchard Replanting Cost"),
                                  5500)
