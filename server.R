@@ -377,7 +377,7 @@ shinyServer(function(input, output, session) {
                     tree_health_aggregated_orchard_cost_yield_and_returns %>%
                       select(c(time, ends_with("net_returns"))) %>%
                       filter(time >= current_year()) %>%
-                      # With a 3% discount rate
+                      # With a user-specified discount rate
                       mutate(npv_multiplier=1/((1+input$percent_interest/100.0)**(time - current_year())),
                              across(ends_with("net_returns"), ~(.*npv_multiplier), .names = "{.col}")) %>% 
                       summarise(across(ends_with("net_returns"), ~dollar(sum(.),accuracy=1))) %>%
