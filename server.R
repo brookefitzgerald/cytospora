@@ -27,11 +27,12 @@ shinyServer(function(input, output, session) {
   updateTotalAnnualCost('annual_cost_1')
   updateTotalAnnualCost('annual_cost_2')
   
+  hide_ui <- function(ui, ...){jqui_hide(ui=ui, effect="blind", ...)}
+  show_ui <- function(ui, ...){jqui_show(ui=ui, effect="blind", ...)}
+  
   # Hide dashboard by default
-  jqui_hide(
-    ui = "#div_dashboard", 
-    effect = "blind"
-  )
+  hide_ui("#div_dashboard")
+  
   observeEvent(input$go_to_app, {
     # if user has clicked away from landing page:
     # first switch to tab `dashboard`:
@@ -41,12 +42,8 @@ shinyServer(function(input, output, session) {
         selected = "dashboard"
       )
       
-      # then show it's contents:
-      jqui_show(
-        ui = "#div_dashboard", 
-        effect = "blind", 
-        duration = 0
-      )
+      # then show_ui it's contents:
+      show_ui("#div_dashboard", duration=0)
   })
   
   output$logo <- renderImage(

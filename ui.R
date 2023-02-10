@@ -169,8 +169,9 @@ ui <- tabsetPanel(
                   selectInput("replanting_strategy",
                               label=infoHoverLabel("Dead Tree Replanting Strategy"), 
                               choices=list(
-                                "Don't replant"                                                  = 'no_replant', 
+                                "Don't replant"                                                  = 'no_replant',
                                 "Replant dead trees every year"                                  = 'tree_replant',
+                                "Remove dead trees every year"                                   = 'tree_remove',
                                 "Replant orchard every planned replanting cycle number of years" = 'orchard_replant'),
                               selected = 'orchard_replant'),
                   tags$div(
@@ -191,7 +192,7 @@ ui <- tabsetPanel(
                     id="tree_replant_inputs",
                     numericInput("replant_cost_tree",
                                  infoHoverLabel("Tree Replanting Cost"),
-                                 10),
+                                 20),
                     
                     radioButtons("replant_tree_block_size",
                                  infoHoverLabel("Number of additional surrounding trees to replant",
@@ -203,6 +204,12 @@ ui <- tabsetPanel(
                                    "3 (replant 48 extra trees)"=3,
                                    "4 (replant 80 extra trees)"=4)
                     )),
+                    tags$div(
+                      id="tree_remove_inputs",
+                      numericInput("remove_cost_tree",
+                                   infoHoverLabel("Tree Removal Cost"),
+                                   10)
+                      ),
                   actionButton("replanting_menu_hide", "Close menu"),
                 )
             ),
