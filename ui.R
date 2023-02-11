@@ -34,13 +34,13 @@ menuIconLabel <- function(label, id_prefix){
 # Create UI for Landing page with CSU Branding
 
 ui <- tabsetPanel(
-  id = "panels", 
-  type = "hidden", 
-  selected = "landing_page", 
+  id="panels",
+  type="hidden",
+  selected="landing_page",
   
   tabPanelBody(
-    value = "landing_page",
-    includeCSS(path = "www/css/styles.css"), 
+    value="landing_page",
+    includeCSS(path="www/css/styles.css"),
     tags$div(
       class="landing_page_div",
       tags$h1(class="landing_page_h1", "Disease Decision Tool: Cytospora"),
@@ -57,7 +57,7 @@ ui <- tabsetPanel(
         )
       ),
       tags$div(
-        class = "center", 
+        class="center",
         actionButton("go_to_app", "Go to app")
       )
     )
@@ -73,7 +73,9 @@ ui <- tabsetPanel(
         tags$head(tags$link(rel = "shortcut icon", href = "favicon.ico")),
         tags$head(tags$style(HTML("table {table-layout: fixed;}"))),
         tags$head(tags$style(".datatables .display {margin-left: 0;}")),
-        tags$script(src = "myscript.js"),
+        tags$head(includeHTML("www/google-analytics.html")),
+        tags$script(src="myscript.js"),
+        
         # Application title
         titlePanel("Cytospora Decision Support Tool"),
     
@@ -84,7 +86,7 @@ ui <- tabsetPanel(
                   numericInput("annual_cost",
                                # Using infoHoverLabel from ui.R to add an informational tooltip
                                infoHoverLabel("Annual Production Cost ($/ac/yr)"),
-                               value = 4885 + 1000),
+                               value=4885 + 1000),
                               dropdownButton(
                                 tags$h3("Production Cost Inputs"),
                                 numericInput("annual_cost_1",
@@ -93,12 +95,12 @@ ui <- tabsetPanel(
                                 numericInput("annual_cost_2",
                                              infoHoverLabel("Water Cost ($/ac/yr)"),
                                              value=1000),
-                                circle = TRUE,
-                                status = "primary", 
-                                icon = icon("gear"), 
+                                circle=TRUE,
+                                status="primary",
+                                icon=icon("gear"),
                                 size='sm',
-                                width = "300px",
-                                tooltip = tooltipOptions(title = "Click for help with budgeting production cost")
+                                width="300px",
+                                tooltip=tooltipOptions(title="Click for help with budgeting production cost")
                               ),
                             ),
                  numericInput("max_yield",
@@ -119,20 +121,20 @@ ui <- tabsetPanel(
                    id="disease_menu",
                    numericInput("inf_intro",
                                 infoHoverLabel("Initial Number of Trees Infected", "Initial number of trees infected at `Year Disease Starts`."),
-                                min = 0,
-                                max = 100,
+                                min=0,
+                                max=100,
                                 value=10),
                    sliderInput("disease_spread_rate",
                                infoHoverLabel("Rate of Disease Spread Between Trees Per Year (%/yr)",
                                               "Rate of disease spread between trees per year. Reduces yield of neighboring trees by this percentage of each tree's amount of disease if no treatment is used."),
-                               min = 0,
-                               max = 100,
+                               min=0,
+                               max=100,
                                value=10),
                    sliderInput("disease_growth_rate",
                                infoHoverLabel("Rate of Disease Growth Within a Tree Per Year (%/yr)",
                                               "Rate of disease growth within a tree per year. Reduces yield by this percentage, with additional decreases from neighboring trees spreading disease. This decrease can be prevented by sufficient treatment."),
-                               min = 0,
-                               max = 100,
+                               min=0,
+                               max=100,
                                value=20),
                    actionButton("disease_menu_hide", "Close menu")
                  ),
@@ -143,16 +145,16 @@ ui <- tabsetPanel(
                    id="treatments_menu",
                    sliderInput("control1",
                                infoHoverLabel("Treatment 1 Spread Reduction Rate Per Year (%/yr)", "Percentage reduction of disease spread of all trees per year after `Year Treatment Starts` of Treatment 1. Note that the treatments do not heal trees from disease."),
-                               min = 0,
-                               max = 100,
+                               min=0,
+                               max=100,
                                value=10),
                    numericInput("t1_cost",
                                 infoHoverLabel("Treatment 1 Cost ($/ac/yr)", "Treatment 1 cost per acre per year after `Year Treatment Starts`. Note that more effective treatments are likely more expensive."),
                                 value=350),
                    sliderInput("control2",
                                infoHoverLabel("Treatment 2 Spread Reduction Rate Per Year (%/yr)", "Percentage reduction of disease spread of all trees per year after `Year Treatment Starts` of Treatment 2. Note that the treatments do not heal trees from disease."),
-                               min = 0,
-                               max = 100,
+                               min=0,
+                               max=100,
                                value=20),
                    numericInput("t2_cost",
                                 infoHoverLabel("Treatment 2 Cost ($/ac/yr)", "Treatment 2 cost per acre per year after `Year Treatment Starts`. Note that more effective treatments are likely more expensive."),
@@ -166,7 +168,7 @@ ui <- tabsetPanel(
                   id="replanting_menu",
                   selectInput("replanting_strategy",
                               label=infoHoverLabel("Dead Tree Replanting Strategy"), 
-                              choices = list(
+                              choices=list(
                                 "Don't replant"                                                  = 'no_replant', 
                                 "Replant dead trees every year"                                  = 'tree_replant',
                                 "Replant orchard every planned replanting cycle number of years" = 'orchard_replant'),
@@ -180,6 +182,7 @@ ui <- tabsetPanel(
                                 max=40,
                                 value = 20),
                     textOutput("orchard_replants_count"),
+                    tags$br(),
                     numericInput("replant_cost_orchard",
                                  infoHoverLabel("Orchard Replanting Cost"),
                                  5500)
@@ -206,37 +209,53 @@ ui <- tabsetPanel(
             column(2,
                sliderInput("time_horizon", 
                            infoHoverLabel("Years to Run Simulation"),
-                           min = as.Date('2000-01-01'), 
-                           max = as.Date('2100-01-01'), 
-                           value = c(as.Date('2022-01-01'), as.Date('2062-01-01')),
-                           timeFormat = '%Y'),
+                           min=as.Date('2000-01-01'), 
+                           max=as.Date('2100-01-01'), 
+                           value=c(as.Date('2022-01-01'), as.Date('2062-01-01')),
+                           timeFormat='%Y'),
                 sliderInput("year",
                             infoHoverLabel("Current Year",
                                            "Current year in simulation. Consider changing the year the treatment starts to see the impact on the orchard."),
                             min=2022, 
                             max=2062,
-                            value = 2037,
-                            animate = TRUE),
+                            value=2037,
+                            animate=TRUE),
                 sliderInput("start_disease_year",
                             infoHoverLabel("Year Disease Starts"),
                             min=2022, 
                             max=2062,
                             pre='',
-                            value = 2022),
+                            value=2022),
                 sliderInput("start_treatment_year",
                             infoHoverLabel("Year Treatment Starts",
                                            "Year Treatment 1 and Treatment 2 start being applied. Consider changing the options in `Treatment Settings` to understand their impact."),
                             min=2022, 
                             max=2062,
-                            value = 2022)
+                            value=2022)
                 ),
     
             # Show a plot of the generated distribution
             column(8,
+                fluidRow(
+                  column(1, offset=11,
+                         dropdownButton(
+                           label="Feedback",
+                           HTML('<iframe src="https://docs.google.com/forms/d/e/1FAIpQLScfdX1v_VBzHB0DoFrM-SQZJ1Gh_dlTWGU1QAGSoERE2pP1_Q/viewform?embedded=true" width="640" height="808" frameborder="0" marginheight="0" marginwidth="0">Loading…</iframe>'),
+                           circle=FALSE,
+                           up=FALSE,
+                           icon=shiny::icon("comment"),
+                           right=TRUE,
+                           status="feedback",
+                           size='xs',
+                           width="640px"
+                         )
+                  )
+                ),
                 plotlyOutput("orchard_health", height="350px"),
                 fluidRow(
                   column(6,plotlyOutput("tree_health")),
-                  column(6,DT::dataTableOutput("mytable")))
+                  column(6,DT::dataTableOutput("mytable"))),
+                
                 )
              )
           )
