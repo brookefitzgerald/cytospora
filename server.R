@@ -42,7 +42,7 @@ shinyServer(function(input, output, session) {
         selected = "dashboard"
       )
       
-      # then show_ui it's contents:
+      # then show it's contents:
       show_ui("#div_dashboard", duration=0)
   })
   
@@ -58,10 +58,11 @@ shinyServer(function(input, output, session) {
   
   ##### Dynamically rendering the simulation options ########
   # Initially untoggled panel elements
-  jqui_hide(ui="#disease_menu",        effect="blind")
-  jqui_hide(ui="#replanting_menu",     effect="blind")
-  jqui_hide(ui="#treatments_menu",     effect="blind")
-  jqui_hide(ui="#tree_replant_inputs", effect="blind")
+  hide_ui(ui="#disease_menu")
+  hide_ui(ui="#replanting_menu")
+  hide_ui(ui="#treatments_menu")
+  hide_ui(ui="#tree_replant_inputs")
+  hide_ui(ui="#tree_remove_inputs")
   
   is_hidden_menu_list <- list(
     disease=TRUE,
@@ -81,6 +82,8 @@ shinyServer(function(input, output, session) {
     # Toggles the menu hidden and shown using the main button
       observeEvent(input[[glue("{menu_name}_menu_toggle")]], {
         jqui_toggle(glue('#{menu_name}_menu'), effect = "blind")
+        # double arrow persists the data in the `is_hidden_menu_list` object
+        # needed to make sure that each menu's toggle state is persisted 
         is_hidden_menu_list[[menu_name]] <<- !is_hidden_menu_list[[menu_name]]
         update_menu_arrow_icon_class(menu_name, is_hidden_menu_list[[menu_name]])
       })
@@ -88,7 +91,7 @@ shinyServer(function(input, output, session) {
   toggle_menu_close <- function(menu_name){
     # Closes the menu with the close button
     observeEvent(input[[glue("{menu_name}_menu_hide")]], {
-      jqui_hide(glue('#{menu_name}_menu'), effect = "blind")
+      hide_ui(glue('#{menu_name}_menu'))
       is_hidden_menu_list[[menu_name]] <<- TRUE
       update_menu_arrow_icon_class(menu_name, is_hidden_menu_list[[menu_name]])
     })
@@ -123,17 +126,18 @@ shinyServer(function(input, output, session) {
     n_cycles <- floor((rv$end_year - rv$start_year)/input$replant_cycle_year_orchard)
     ifelse(n_cycles==0, 1, n_cycles)
   })
-  get_replanting_years <- (function(with_added_start_year=FALSE){
-    if (input$replanting_strategy %in% c('no_replant', 'tree_replant')) {
-      replanting_years <- c(rv$end_year - rv$start_year)
+  get_planting_years <- (function(with_added_start_year=FALSE){
+    # If not replanting on a cycle, only return the first year
+    if (input$replanting_strategy %in% c('no_replant', 'tree_replant', 'tree_remove')) {
+      planting_years <- c(rv$end_year - rv$start_year)
     } else {
       n_cycles_possible <- get_n_cycles_possible()
       years_replanted <- (1:n_cycles_possible)*input$replant_cycle_year_orchard
       to_add <- ifelse(with_added_start_year, rv$start_year, 0)
-      replanting_years <- years_replanted + to_add
+      planting_years <- years_replanted + to_add
     }
     
-    return(replanting_years)
+    return(planting_years)
   })
   observeEvent(input$time_horizon, {
     start_yr <- rv$start_year <- get_year_from_date(input$time_horizon[1])
@@ -165,7 +169,7 @@ shinyServer(function(input, output, session) {
   # Render number of cycles conditional on cycle length and number of years in simulation
   
   output$orchard_replants_count <- renderText({
-    years_orchard_is_replanted_string <- paste(get_replanting_years(with_added_start_year=TRUE), collapse=", ")
+    years_orchard_is_replanted_string <- paste(get_planting_years(with_added_start_year=TRUE), collapse=", ")
     return(paste0("Orchard is replanted ", get_n_cycles_possible(), " times in the year(s): ", years_orchard_is_replanted_string))
   })
   
@@ -173,15 +177,20 @@ shinyServer(function(input, output, session) {
   # If the replanting strategy is to replant the whole orchard, hide the tree cost options.
   observeEvent(input$replanting_strategy, {
     if (input$replanting_strategy == 'no_replant') {
-      jqui_hide(ui="#tree_replant_inputs",    effect="blind")
-      jqui_hide(ui="#orchard_replant_inputs", effect="blind")
+      to_hide <- c("#tree_replant_inputs", "#orchard_replant_inputs", "#tree_remove_inputs")
+      to_show <- c()
     } else if (input$replanting_strategy == 'tree_replant') {
-      jqui_show(ui="#tree_replant_inputs",    effect="blind")
-      jqui_hide(ui="#orchard_replant_inputs", effect="blind")
+      to_hide <- c("#orchard_replant_inputs", "#tree_remove_inputs")
+      to_show <- c("#tree_replant_inputs")
+    } else if (input$replanting_strategy == 'tree_remove') {
+      to_hide <- c("#tree_replant_inputs", "#orchard_replant_inputs")
+      to_show <- c("#tree_remove_inputs")
     } else if (input$replanting_strategy == 'orchard_replant') {
-      jqui_hide(ui="#tree_replant_inputs",    effect="blind")
-      jqui_show(ui="#orchard_replant_inputs", effect="blind")
+      to_hide <- c("#tree_replant_inputs", "#tree_remove_inputs")
+      to_show <- c("#orchard_replant_inputs")
     }
+    lapply(to_hide, hide_ui)
+    lapply(to_show, show_ui)
   })
 
   
@@ -205,10 +214,12 @@ shinyServer(function(input, output, session) {
       output_price = output_price(),
       annual_cost = input$annual_cost,
       replanting_strategy = input$replanting_strategy,
-      replant_years = get_replanting_years(),
+      replant_years = get_planting_years(),
+      remove_cost_tree = input$remove_cost_tree,
       replant_cost_tree = input$replant_cost_tree,
       replant_cost_orchard = input$replant_cost_orchard,
       replant_tree_block_size=as.numeric(input$replant_tree_block_size),
+      remove_tree_block_size=0, # TODO: decide if this should also be removed in blocks
       inf_intro = input$inf_intro,
       control1 = input$control1/100,
       t1_cost = input$t1_cost,
@@ -221,8 +232,13 @@ shinyServer(function(input, output, session) {
       data2 <- tree_health_data() %>%
         dplyr::select(-ends_with(c("net_returns", "realized_costs"))) %>%
         dplyr::filter(time==current_year()) %>%
+        mutate(
+          `No Treatment`=ifelse(nt_tree_age==0, NA, `No Treatment`),
+          `Treatment 1`=ifelse(t1_tree_age==0, NA, `Treatment 1`),
+          `Treatment 2`=ifelse(t2_tree_age==0, NA, `Treatment 2`)) %>%
+        dplyr::select(-ends_with("tree_age")) %>%
         mutate(across(-c(x,y,time), ~ifelse(`Disease Free`>0, ./`Disease Free`, 1))) %>%
-        dplyr::select(-`Disease Free`) %>%
+        dplyr::select(-c(`Disease Free`)) %>%
         pivot_longer(-c(x,y,time)) %>%
         mutate(yield=ifelse(value<0,0,value))
         
@@ -238,7 +254,7 @@ shinyServer(function(input, output, session) {
           add_row(x=-1, y=1, yield=1, name='Treatment 2') %>%
           ggplot(aes(x=x,y=y,fill=yield)) +
           geom_tile(size=.1,show.legend = F) +
-          scale_fill_gradient(name="Tree Health",low = "red", high = "green", limits=c(0,1), na.value="green") +
+          scale_fill_gradient(name="Tree Health",low = "red", high = "green", limits=c(0,1), na.value="black") +
           scale_x_continuous(name = "Column") +
           scale_y_continuous(name = "Row") +
           theme_bw(base_size = 15) +
@@ -303,7 +319,7 @@ shinyServer(function(input, output, session) {
       # if hovering, plot the tree's yield over time. If not hovering, plot the
       # table row selected, otherwise render the overall orchard yield.
       selected_row <- input$mytable_rows_selected
-      df <- tree_health_data()
+      df <- tree_health_data() %>% select(-ends_with("tree_age"))
       
       if (!is.null(most_recent_x_y_hover())) {
         p <- plot_tree_yield(df, x_coord=most_recent_x_y_hover()[["x"]], y_coord=most_recent_x_y_hover()[["y"]])
@@ -333,6 +349,7 @@ shinyServer(function(input, output, session) {
     
     output$mytable <- DT::renderDataTable({
       tree_health_aggregated_orchard_cost_yield_and_returns <- tree_health_data() %>%
+        select(-ends_with("tree_age")) %>%
         group_by(time) %>%
         summarize(across(-c(x,y),~sum(.,na.rm = T))) %>%
         ungroup()
@@ -383,7 +400,7 @@ shinyServer(function(input, output, session) {
                       add_column(`Economic Result`="Net Present Value From Current Year ($/ac)", .before = 1),
                     #Row 5: operating duration
                     tree_health_aggregated_orchard_cost_yield_and_returns %>%
-                      filter((time > (rv$start_year + TREE_FIRST_FULL_YIELD_YEAR)) & (time < (rv$start_year + get_replanting_years()[1]))) %>%
+                      filter((time > (rv$start_year + TREE_FIRST_FULL_YIELD_YEAR)) & (time < (rv$start_year + get_planting_years()[1]))) %>%
                       # orders descending order so that the function cumsum sums starting from the end of the life of the orchard
                       arrange(desc(time)) %>%
                       mutate(across(ends_with("net_returns"), ~coalesce(sum_roll_6(.), cumsum(.)), .names = "{.col}_cum")) %>%

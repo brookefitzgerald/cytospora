@@ -37,12 +37,15 @@ tree_sim <- function(o_rows=24, #Block dimension row
                      o_cols=24, #Block dimension col
                      TH=40,     #Time Horizon
                      start_year=2022, #year simulation starts (only used to transform time at end)
+                     remove_trees=FALSE, #Remove tree if the tree dies
                      replant_trees=FALSE, #Replant tree if the tree dies
                      replant_orchard=TRUE, #Replant orchard at replant year
                      replant_years=c(20),  # Year(s) the orchard will be replanted
                      replant_cost_orchard=3000, # Cost to replant the entire orchard
-                     replant_cost_tree=10, #Cost to replant an individual tree
+                     replant_cost_tree=20, #Cost to replant an individual tree
+                     remove_cost_tree=10, #Cost to remove an individual tree (without replanting)
                      replant_tree_block_size=0, # n trees around replanted tree to also replant
+                     remove_tree_block_size=0, # n trees around removed tree to also remove
                      t_disease_year=1, #Year infection starts in the orchard
                      t_treatment_year=1, # Year the disease begins to be treated
                      inf_starts=2,   #Number of infectious starts
@@ -95,6 +98,15 @@ tree_sim <- function(o_rows=24, #Block dimension row
   disease_shell[,,1:(t_disease_year - 1)] <- 0
   disease_shell[,,t_disease_year] <- inf_mat
   
+  # Setting replanting/removal block size
+  if (replant_trees) {
+    replant_or_remove_tree_block_size <- replant_tree_block_size
+    replant_or_remove_cost <- replant_cost_tree
+  } else if (remove_trees){
+    replant_or_remove_tree_block_size <- remove_tree_block_size
+    replant_or_remove_cost <- remove_cost_tree
+  }
+  
   #Tree Age
   age_shell <- vector("list",TH)
   age_shell[[1]] <- orc_mat
@@ -132,21 +144,26 @@ tree_sim <- function(o_rows=24, #Block dimension row
     }
     
     #Replace dead trees if part of mitigation strategy
-    if(replant_trees==TRUE && t != 1){
-      to_replant <- tree_shell[[t+1]] <= 0.0 #Boolean indicating true if dead, false otherwise
-      dead_trees <- which(to_replant, arr.ind = TRUE)
+    if((replant_trees==TRUE || remove_trees==TRUE) && t != 1){
+      to_replant_or_remove <- tree_shell[[t+1]] <= 0.0 #Boolean indicating true if dead, false otherwise
+      dead_trees <- which(to_replant_or_remove, arr.ind = TRUE)
       if (nrow(dead_trees)>0){
         for (tree_i in 1:nrow(dead_trees)) {
-          neighboring_tree_rows_to_replant <- get_indices(i=dead_trees[tree_i, 1], k=replant_tree_block_size, n=o_rows)
-          neighboring_tree_cols_to_replant <- get_indices(i=dead_trees[tree_i, 2], k=replant_tree_block_size, n=o_cols)
-          to_replant[neighboring_tree_rows_to_replant, neighboring_tree_cols_to_replant] <- TRUE
+          neighboring_tree_rows_to_replant_or_remove <- get_indices(i=dead_trees[tree_i, 1], k=replant_or_remove_tree_block_size, n=o_rows)
+          neighboring_tree_cols_to_replant_or_remove <- get_indices(i=dead_trees[tree_i, 2], k=replant_or_remove_tree_block_size, n=o_cols)
+          to_replant_or_remove[neighboring_tree_rows_to_replant_or_remove, neighboring_tree_cols_to_replant_or_remove] <- TRUE
         }
       }
-      
-      age_shell[[t+1]][to_replant] <- 1.0 # Replanted tree is 1 year old
-      tree_shell[[t+1]][to_replant] <- 1.0 # Replanted tree has initial yields
-      disease_shell[,,t+1][to_replant] <- 0.0 # Replanted tree is healthy
-      cost_shell[[t+1]] <- cost_shell[[t+1]] + sum(to_replant)*replant_cost_tree # Number of trees replanted times their cost
+      if (replant_trees) {
+        age_shell[[t+1]][to_replant_or_remove] <- 1.0 # Replanted tree is 1 year old
+        tree_shell[[t+1]][to_replant_or_remove] <- 1.0 # Replanted tree has initial yields
+        disease_shell[,,t+1][to_replant_or_remove] <- 0.0 # Replanted tree is healthy
+      } else {
+        age_shell[[t+1]][to_replant_or_remove] <- 0.0 # Tree is removed
+        tree_shell[[t+1]][to_replant_or_remove] <- 0.0 
+        disease_shell[,,t+1][to_replant_or_remove] <- 0.0 # Removed tree does not infect neighboring trees
+      }
+      cost_shell[[t+1]] <- cost_shell[[t+1]] + sum(to_replant_or_remove)*replant_or_remove_cost # Number of trees replanted times their cost
     }
     # Replant orchard if part of mitigation strategy
     if((replant_orchard==TRUE) & (t %in% replant_years)){
@@ -161,11 +178,11 @@ tree_sim <- function(o_rows=24, #Block dimension row
     tree_shell[[t+1]] <- pmax(zeros(o_rows, o_cols), tree_shell[[t+1]]) # set negative yields to zero
   }
   
-  tree_health <- pmap_df(list(tree_shell, c(1:TH), cost_shell),
-                         function(tree, cntr, yearly_cost){
+  tree_health <- pmap_df(list(tree_shell, c(1:TH), cost_shell, age_shell),
+                         function(tree, cntr, yearly_cost, age){
                            # subtracting one from the yield so that the initial yield is truly 0
                            # (non-zero yield is initially necessary for the growth function to work)
-                           bind_cols(expand_grid(x=c(1:o_cols),y=c(1:o_rows)),yield=pmax(as.vector(tree)-1, integer(length(as.vector(tree))))) %>%
+                           bind_cols(expand_grid(x=c(1:o_cols),y=c(1:o_rows)),yield=pmax(as.vector(tree)-1, integer(length(as.vector(tree)))), tree_age=as.vector(age)) %>%
                              add_column(
                                time=start_year + cntr - 1,
                                realized_costs=yearly_cost/numel(orc_mat),
@@ -184,6 +201,8 @@ simulateControlScenarios <- function(year_start,
                                      disease_spread_rate,
                                      disease_growth_rate,
                                      replanting_strategy,
+                                     remove_cost_tree,
+                                     remove_tree_block_size,
                                      replant_cost_tree,
                                      replant_cost_orchard,
                                      replant_years,
@@ -206,10 +225,13 @@ simulateControlScenarios <- function(year_start,
                                            t_treatment_year=t_treatment_year,
                                            replant_trees=(replanting_strategy=='tree_replant'),
                                            replant_orchard=(replanting_strategy=='orchard_replant'),
+                                           remove_trees=(replanting_strategy=='tree_remove'),
                                            replant_years=replant_years,
+                                           remove_cost_tree=remove_cost_tree,
                                            replant_cost_tree=replant_cost_tree,
                                            replant_cost_orchard=replant_cost_orchard,
                                            replant_tree_block_size=replant_tree_block_size,
+                                           remove_tree_block_size=remove_tree_block_size,
                                            max_yield=max_yield,
                                            annual_cost=annual_cost,
                                            output_price=output_price,

@@ -169,7 +169,7 @@ ui <- tabsetPanel(
                   selectInput("replanting_strategy",
                               label=infoHoverLabel("Dead Tree Replanting Strategy"), 
                               choices=list(
-                                "Don't replant"                                                  = 'no_replant',
+                                "Don't replant or remove"                                        = 'no_replant',
                                 "Replant dead trees every year"                                  = 'tree_replant',
                                 "Remove dead trees every year"                                   = 'tree_remove',
                                 "Replant orchard every planned replanting cycle number of years" = 'orchard_replant'),
@@ -244,7 +244,7 @@ ui <- tabsetPanel(
             # Show a plot of the generated distribution
             column(8,
                 fluidRow(
-                  column(1, offset=11,
+                  column(1, offset=10,
                          dropdownButton(
                            label="Feedback",
                            HTML('<iframe src="https://docs.google.com/forms/d/e/1FAIpQLScfdX1v_VBzHB0DoFrM-SQZJ1Gh_dlTWGU1QAGSoERE2pP1_Q/viewform?embedded=true" width="640" height="808" frameborder="0" marginheight="0" marginwidth="0">Loading…</iframe>'),
