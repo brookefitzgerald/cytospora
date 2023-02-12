@@ -50,6 +50,7 @@ tree_sim <- function(o_rows=24, #Block dimension row
                      t_treatment_year=1, # Year the disease begins to be treated
                      inf_starts=2,   #Number of infectious starts
                      max_yield=15,   #Yield at maturity
+                     disease_random_share_of_spread=0.0, # Share of disease spread that is random vs. only to adjacent trees. (0 is completely determined by neighbors, 1 is completely random)
                      disease_spread_rate=.10, #Rate of disease spread to adjacent trees in all directions (can be made more flexible)
                      disease_growth_rate=.2, #Rate of disease growth within a tree
                      control_effort=0.0, #Rate of control effort applied per year
@@ -138,7 +139,15 @@ tree_sim <- function(o_rows=24, #Block dimension row
     
     #Propagate disease if disease spread has started
     if (t >= t_disease_year){
-      disease_shell[,,t+1] <- disease_shell[,,t]%*%(tmat_x + tmat_identity) + t(t(disease_shell[,,t])%*%tmat_y)
+      change_in_disease_spread <- disease_shell[,,t]%*%tmat_x + t(t(disease_shell[,,t])%*%tmat_y)
+      disease_shell[,,t+1] <- disease_shell[,,t]%*%tmat_identity + change_in_disease_spread*(1-disease_random_share_of_spread)
+      
+      # If disease is spread randomly, shuffle the 
+      if (disease_random_share_of_spread > 0){
+        random_disease_growth_amounts <- change_in_disease_spread*disease_random_share_of_spread
+        shuffled_random_spread <- sample(random_disease_growth_amounts, o_rows*o_cols)
+        disease_shell[,,t+1] <- disease_shell[,,t+1] + matrix(shuffled_random_spread, nrow=o_rows)
+      }
       
       #Disease is mitigated if present
       disease_shell[,,t+1] <- disease_shell[,,t+1]*(1-control_effort)
@@ -147,7 +156,7 @@ tree_sim <- function(o_rows=24, #Block dimension row
     
     #Replace dead trees if part of mitigation strategy
     if((replant_trees==TRUE || remove_trees==TRUE) && t != 1){
-      to_replant_or_remove <- tree_shell[[t+1]] <= 0.0 #Boolean indicating true if dead, false otherwise
+      to_replant_or_remove <- tree_shell[[t+1]] <= 0.0 # Boolean indicating true if dead, false otherwise
       dead_trees <- which(to_replant_or_remove, arr.ind = TRUE)
       if (nrow(dead_trees)>0){
         for (tree_i in 1:nrow(dead_trees)) {
@@ -207,51 +216,24 @@ tree_sim <- function(o_rows=24, #Block dimension row
 ## Function to run different disease control scenarios
 simulateControlScenarios <- function(year_start,
                                      year_end,
-                                     t_disease_year,
-                                     t_treatment_year,
-                                     disease_spread_rate,
-                                     disease_growth_rate,
-                                     replanting_strategy,
-                                     remove_cost_tree,
-                                     remove_tree_block_size,
-                                     replant_cost_tree,
-                                     replant_cost_orchard,
-                                     replant_years,
-                                     replant_tree_block_size,
-                                     max_yield,
-                                     output_price,
-                                     annual_cost,
                                      inf_intro,
                                      control1,
                                      t1_cost,
                                      control2,
                                      t2_cost,
-                                     input_annual_price_change,
-                                     output_annual_price_change){
+                                     replanting_strategy,
+                                     # dots indicate all other arguments are passed on verbatim to the tree_sim function
+                                     ...){ 
   # set all of the same settings that are shared between simulations 
   time_horizon = year_end - year_start
   
   tree_sim_with_shared_settings <- partial(tree_sim, 
                                            TH=time_horizon,
                                            start_year=year_start,
-                                           t_disease_year=t_disease_year,
-                                           t_treatment_year=t_treatment_year,
                                            replant_trees=(replanting_strategy=='tree_replant'),
                                            replant_orchard=(replanting_strategy=='orchard_replant'),
                                            remove_trees=(replanting_strategy=='tree_remove'),
-                                           replant_years=replant_years,
-                                           remove_cost_tree=remove_cost_tree,
-                                           replant_cost_tree=replant_cost_tree,
-                                           replant_cost_orchard=replant_cost_orchard,
-                                           replant_tree_block_size=replant_tree_block_size,
-                                           remove_tree_block_size=remove_tree_block_size,
-                                           max_yield=max_yield,
-                                           annual_cost=annual_cost,
-                                           output_price=output_price,
-                                           disease_spread_rate=disease_spread_rate,
-                                           disease_growth_rate=disease_growth_rate,
-                                           input_annual_price_change=input_annual_price_change,
-                                           output_annual_price_change=output_annual_price_change)
+                                           ...)
   
   tree_health_max <- tree_sim_with_shared_settings(inf_starts = 0) %>%   #inf_starts=0 implies no infection for Disease Free
     rename_with(~str_c("max_",.),-c(x,y,time))
