@@ -56,6 +56,8 @@ tree_sim <- function(o_rows=24, #Block dimension row
                      control_cost=0.0, #Cost of the control applied
                      output_price=30,  #Output price of product (peaches)
                      annual_cost=10,   #Annual production cost
+                     input_annual_price_change=0.0, # Annual percentage change in input prices
+                     output_annual_price_change=0.0, # Annual percentage change in output prices
                      sim_seed=25){
   
   require(dplyr)
@@ -182,13 +184,22 @@ tree_sim <- function(o_rows=24, #Block dimension row
                          function(tree, cntr, yearly_cost, age){
                            # subtracting one from the yield so that the initial yield is truly 0
                            # (non-zero yield is initially necessary for the growth function to work)
-                           bind_cols(expand_grid(x=c(1:o_cols),y=c(1:o_rows)),yield=pmax(as.vector(tree)-1, integer(length(as.vector(tree)))), tree_age=as.vector(age)) %>%
+                           # but making sure that it doesn't go negative (some trees  
+                           # impacted by disease can have a yield < 1)
+                           bind_cols(
+                             expand_grid(x=c(1:o_cols),y=c(1:o_rows)),
+                             yield=pmax(as.vector(tree)-1, integer(length(as.vector(tree)))),
+                             tree_age=as.vector(age)) %>%
                              add_column(
                                time=start_year + cntr - 1,
+                               input_price_adjustment_factor=(1+input_annual_price_change)**cntr,
+                               output_price_adjustment_factor=(1+output_annual_price_change)**cntr,
                                realized_costs=yearly_cost/numel(orc_mat),
                              )
                          }) %>%
-    mutate(net_returns=output_price*yield - realized_costs)
+    # adjust the input and output prices by our input and output adjustment percentages
+    mutate(net_returns=output_price*output_price_adjustment_factor*yield - realized_costs*input_price_adjustment_factor) %>%
+    select(-c(input_price_adjustment_factor, output_price_adjustment_factor))
   
   return(tree_health)
 }
@@ -214,7 +225,9 @@ simulateControlScenarios <- function(year_start,
                                      control1,
                                      t1_cost,
                                      control2,
-                                     t2_cost){
+                                     t2_cost,
+                                     input_annual_price_change,
+                                     output_annual_price_change){
   # set all of the same settings that are shared between simulations 
   time_horizon = year_end - year_start
   
@@ -236,7 +249,9 @@ simulateControlScenarios <- function(year_start,
                                            annual_cost=annual_cost,
                                            output_price=output_price,
                                            disease_spread_rate=disease_spread_rate,
-                                           disease_growth_rate=disease_growth_rate)
+                                           disease_growth_rate=disease_growth_rate,
+                                           input_annual_price_change=input_annual_price_change,
+                                           output_annual_price_change=output_annual_price_change)
   
   tree_health_max <- tree_sim_with_shared_settings(inf_starts = 0) %>%   #inf_starts=0 implies no infection for Disease Free
     rename_with(~str_c("max_",.),-c(x,y,time))
@@ -262,7 +277,6 @@ simulateControlScenarios <- function(year_start,
     inner_join(t2, by = c("x", "y", "time")) %>%
     rename(`Disease Free`=max_yield,`No Treatment`=nt_yield,`Treatment 1`=t1_yield,`Treatment 2`=t2_yield)
 }
-
 
 ############## Plotting Functions #####################
 

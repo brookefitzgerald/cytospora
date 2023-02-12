@@ -83,27 +83,29 @@ ui <- tabsetPanel(
         fluidRow(
             column(2,
                 tags$div(
-                  numericInput("annual_cost",
-                               # Using infoHoverLabel from ui.R to add an informational tooltip
-                               infoHoverLabel("Annual Production Cost ($/ac/yr)"),
-                               value=4885 + 1000),
-                              dropdownButton(
-                                tags$h3("Production Cost Inputs"),
-                                numericInput("annual_cost_1",
-                                             infoHoverLabel("Labor Cost ($/ac/yr)"),
-                                             value=4885),
-                                numericInput("annual_cost_2",
-                                             infoHoverLabel("Water Cost ($/ac/yr)"),
-                                             value=1000),
-                                circle=TRUE,
-                                status="primary",
-                                icon=icon("gear"),
-                                size='sm',
-                                width="300px",
-                                tooltip=tooltipOptions(title="Click for help with budgeting production cost")
-                              ),
-                            ),
-                 numericInput("max_yield",
+                  actionButton("costs_menu_toggle", menuIconLabel("Prices/Costs Settings", id_prefix="costs"), class="menu"),
+                  tags$div(
+                    id="costs_menu",
+                    numericInput("annual_cost",
+                                 # Using infoHoverLabel from ui.R to add an informational tooltip
+                                 infoHoverLabel("Annual Production Cost ($/ac/yr)"),
+                                 value=4885 + 1000),
+                    dropdownButton(
+                      tags$h3("Production Cost Inputs"),
+                      numericInput("annual_cost_1",
+                                   infoHoverLabel("Labor Cost ($/ac/yr)"),
+                                   value=4885),
+                      numericInput("annual_cost_2",
+                                   infoHoverLabel("Water Cost ($/ac/yr)"),
+                                   value=1000),
+                      circle=TRUE,
+                      status="primary",
+                      icon=icon("gear"),
+                      size='sm',
+                      width="300px",
+                      tooltip=tooltipOptions(title="Click for help with budgeting production cost")
+                    ),
+                numericInput("max_yield",
                               infoHoverLabel("Mature Disease-Free Yield lbs/ac/year"),
                               13000),
                 numericInput("output_price",
@@ -116,6 +118,22 @@ ui <- tabsetPanel(
                              value=3,
                              min=0,
                              max=100),
+                numericInput("percent_price_change",
+                             infoHoverLabel("Price Change (%)",
+                                            "Annual percentage change in output peach prices."),
+                             value=0,
+                             min=-30,
+                             max=30),
+                numericInput("percent_cost_change",
+                             infoHoverLabel("Cost Change (%)",
+                                            "Annual percentage change in costs after the first year."),
+                             value=0,
+                             min=-30,
+                             max=30),
+                actionButton("costs_menu_hide", "Close menu")
+                ),
+                tags$br(),
+                tags$br(),
                  actionButton("disease_menu_toggle", menuIconLabel("Disease Settings", id_prefix="disease"), class="menu"),
                  tags$div(
                    id="disease_menu",
@@ -211,6 +229,7 @@ ui <- tabsetPanel(
                                    10)
                       ),
                   actionButton("replanting_menu_hide", "Close menu"),
+                )
                 )
             ),
             column(2,
