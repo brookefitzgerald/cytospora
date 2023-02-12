@@ -57,14 +57,20 @@ shinyServer(function(input, output, session) {
   )
   
   ##### Dynamically rendering the simulation options ########
-  # Initially untoggled panel elements
-  hide_ui(ui="#disease_menu")
-  hide_ui(ui="#replanting_menu")
-  hide_ui(ui="#treatments_menu")
-  hide_ui(ui="#tree_replant_inputs")
-  hide_ui(ui="#tree_remove_inputs")
   
+  # Initially untoggle panel elements
+  for (initially_hidden_menu in c(
+    "#costs_menu", 
+    "#disease_menu", 
+    "#replanting_menu",
+    "#treatments_menu",
+    "#tree_replant_inputs",
+    "#tree_remove_inputs"
+  )) {hide_ui(ui=initially_hidden_menu)}
+  
+  # Store data on hidden menus
   is_hidden_menu_list <- list(
+    costs=TRUE,
     disease=TRUE,
     replanting=TRUE,
     treatments=TRUE
@@ -78,7 +84,7 @@ shinyServer(function(input, output, session) {
       jqui_remove_class(glue("#{id}_menu_icon"), "hidden_menu_arrow")
     }
   }
-  toggle_menu_options <- function(menu_name){
+  setup_toggle_menu_options <- function(menu_name){
     # Toggles the menu hidden and shown using the main button
       observeEvent(input[[glue("{menu_name}_menu_toggle")]], {
         jqui_toggle(glue('#{menu_name}_menu'), effect = "blind")
@@ -88,7 +94,7 @@ shinyServer(function(input, output, session) {
         update_menu_arrow_icon_class(menu_name, is_hidden_menu_list[[menu_name]])
       })
   }
-  toggle_menu_close <- function(menu_name){
+  setup_toggle_menu_close <- function(menu_name){
     # Closes the menu with the close button
     observeEvent(input[[glue("{menu_name}_menu_hide")]], {
       hide_ui(glue('#{menu_name}_menu'))
@@ -96,15 +102,19 @@ shinyServer(function(input, output, session) {
       update_menu_arrow_icon_class(menu_name, is_hidden_menu_list[[menu_name]])
     })
   }
+  # Create hiding/showing listeners for menus
   
-  toggle_menu_options('disease')
-  toggle_menu_close('disease')
+  setup_toggle_menu_options('costs')
+  setup_toggle_menu_close('costs')
   
-  toggle_menu_options('replanting')
-  toggle_menu_close('replanting')
+  setup_toggle_menu_options('disease')
+  setup_toggle_menu_close('disease')
   
-  toggle_menu_options('treatments')
-  toggle_menu_close('treatments')
+  setup_toggle_menu_options('replanting')
+  setup_toggle_menu_close('replanting')
+  
+  setup_toggle_menu_options('treatments')
+  setup_toggle_menu_close('treatments')
   
   # Update year slider ranges conditional on time horizon
   keep_year_proportion <- function(old_value, old_start, old_end, start, end){
@@ -194,7 +204,10 @@ shinyServer(function(input, output, session) {
   })
 
   
-  # Run simulations
+  ####### Run simulations #######
+  # Note that the reactive context means that whenever the relevant inputs 
+  # change, the value of the variable changes and any downstream functions that  
+  # use that variable are run
   t_disease_year <- reactive(input$start_disease_year - rv$start_year + 1)
   t_treatment_year <- reactive(input$start_treatment_year - rv$start_year + 1)
   current_year <- reactive(input$year)
@@ -224,7 +237,9 @@ shinyServer(function(input, output, session) {
       control1 = input$control1/100,
       t1_cost = input$t1_cost,
       control2 = input$control2/100,
-      t2_cost = input$t2_cost
+      t2_cost = input$t2_cost,
+      input_annual_price_change=input$percent_cost_change/100,
+      output_annual_price_change=input$percent_price_change/100
     )})
   
     output$orchard_health <- renderPlotly({
@@ -254,7 +269,7 @@ shinyServer(function(input, output, session) {
           add_row(x=-1, y=1, yield=1, name='Treatment 2') %>%
           ggplot(aes(x=x,y=y,fill=yield)) +
           geom_tile(size=.1,show.legend = F) +
-          scale_fill_gradient(name="Tree Health",low = "red", high = "green", limits=c(0,1), na.value="black") +
+          scale_fill_gradient(name="Tree Health",low = "red", high = "green", limits=c(0,1)) +
           scale_x_continuous(name = "Column") +
           scale_y_continuous(name = "Row") +
           theme_bw(base_size = 15) +
@@ -405,11 +420,13 @@ shinyServer(function(input, output, session) {
                       arrange(desc(time)) %>%
                       mutate(across(ends_with("net_returns"), ~coalesce(sum_roll_6(.), cumsum(.)), .names = "{.col}_cum")) %>%
                       # chooses the first time the expected profit from the net returns is outweighed by the replanted yield
+                      # The plus one is to ensure 
                       summarise(`Treatment 1` = as.character(first(time[t1_net_returns_cum  >= first_six_years_max_net_returns]) + 1),
                                 `Treatment 2` = as.character(first(time[t2_net_returns_cum  >= first_six_years_max_net_returns]) + 1),
                                 `No Treatment`= as.character(first(time[nt_net_returns_cum  >= first_six_years_max_net_returns]) + 1),
                                 `Disease Free`= as.character(first(time[max_net_returns_cum >= first_six_years_max_net_returns]) + 1)) %>%
-                     # mutate(across(everything(), ~ifelse(input$replanting_strategy=='tree_replant', "", .))) %>%
+                      # TODO: decide if it makes sense or not to have the optimal replanting year when not replanting the entire orchard
+                      # mutate(across(everything(), ~ifelse(input$replanting_strategy %in% c('tree_replant'), "", .))) %>% 
                       add_column(`Economic Result`="Optimal First Replanting Year",.before = 1),
                     ),
                     options = list(dom = 't',
