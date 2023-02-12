@@ -221,7 +221,8 @@ shinyServer(function(input, output, session) {
       year_end = rv$end_year + 1,
       t_disease_year = t_disease_year(),
       t_treatment_year = t_treatment_year(),
-      disease_spread_rate = input$disease_spread_rate/100, # function expects a percentage (fraction)
+      disease_random_share_of_spread=input$disease_random_share_of_spread/100, # function expects a percentage (fraction)
+      disease_spread_rate = input$disease_spread_rate/100,
       disease_growth_rate = input$disease_growth_rate/100,
       max_yield = input$max_yield/n_trees_in_orchard,
       output_price = output_price(),
