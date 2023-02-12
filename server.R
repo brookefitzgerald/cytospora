@@ -432,10 +432,10 @@ shinyServer(function(input, output, session) {
                       add_column(`Economic Result`="Optimal First Replanting Year",.before = 1),
                     #Row 6: IRR
                     data.frame(`Economic Result`="Internal Rate of Return",
-                               `Treatment 1` = percent(coalesce(irr(tree_health_aggregated_orchard_cost_yield_and_returns$t1_net_returns), NA)),
-                               `Treatment 2` = percent(coalesce(irr(tree_health_aggregated_orchard_cost_yield_and_returns$t2_net_returns), NA)),
-                               `No Treatment`= percent(coalesce(irr(tree_health_aggregated_orchard_cost_yield_and_returns$nt_net_returns), NA)),
-                               `Disease Free`= percent(coalesce(irr(tree_health_aggregated_orchard_cost_yield_and_returns$max_net_returns), NA)),
+                               `Treatment 1` = percent(coalesce(irr(tree_health_aggregated_orchard_cost_yield_and_returns$t1_net_returns, r.guess=0.05), NA)),
+                               `Treatment 2` = percent(coalesce(irr(tree_health_aggregated_orchard_cost_yield_and_returns$t2_net_returns, r.guess=0.05), NA)),
+                               `No Treatment`= percent(coalesce(irr(tree_health_aggregated_orchard_cost_yield_and_returns$nt_net_returns, r.guess=0.05), NA)),
+                               `Disease Free`= percent(coalesce(irr(tree_health_aggregated_orchard_cost_yield_and_returns$max_net_returns, r.guess=0.05), NA)),
                                check.names=FALSE)
                     ),
                     options = list(dom = 't',
