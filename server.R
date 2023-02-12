@@ -14,6 +14,7 @@ library(shinyjqui)
 library(plotly)
 library(glue)
 library(tibbletime)
+library(jrvFinance)
 
 shinyServer(function(input, output, session) {
   #  First input that is also updated by other inputs e.g. sum(annual_cost_{n})
@@ -132,10 +133,10 @@ shinyServer(function(input, output, session) {
     start_year = NULL,
     end_year = NULL
   )
-  get_n_cycles_possible <- (function() {
+  get_n_cycles_possible <- function() {
     n_cycles <- floor((rv$end_year - rv$start_year)/input$replant_cycle_year_orchard)
     ifelse(n_cycles==0, 1, n_cycles)
-  })
+  }
   get_planting_years <- (function(with_added_start_year=FALSE){
     # If not replanting on a cycle, only return the first year
     if (input$replanting_strategy %in% c('no_replant', 'tree_replant', 'tree_remove')) {
@@ -419,9 +420,9 @@ shinyServer(function(input, output, session) {
                       filter((time > (rv$start_year + TREE_FIRST_FULL_YIELD_YEAR)) & (time < (rv$start_year + get_planting_years()[1]))) %>%
                       # orders descending order so that the function cumsum sums starting from the end of the life of the orchard
                       arrange(desc(time)) %>%
-                      mutate(across(ends_with("net_returns"), ~coalesce(sum_roll_6(.), cumsum(.)), .names = "{.col}_cum")) %>%
+                      mutate(across(ends_with("net_returns"), ~ifelse(n() >= 6, coalesce(sum_roll_6(.), cumsum(.)), NA), .names = "{.col}_cum")) %>%
                       # chooses the first time the expected profit from the net returns is outweighed by the replanted yield
-                      # The plus one is to ensure 
+                      # The plus one is to ensure that the year matches the year replanted (indexing problem)
                       summarise(`Treatment 1` = as.character(first(time[t1_net_returns_cum  >= first_six_years_max_net_returns]) + 1),
                                 `Treatment 2` = as.character(first(time[t2_net_returns_cum  >= first_six_years_max_net_returns]) + 1),
                                 `No Treatment`= as.character(first(time[nt_net_returns_cum  >= first_six_years_max_net_returns]) + 1),
@@ -429,6 +430,13 @@ shinyServer(function(input, output, session) {
                       # TODO: decide if it makes sense or not to have the optimal replanting year when not replanting the entire orchard
                       # mutate(across(everything(), ~ifelse(input$replanting_strategy %in% c('tree_replant'), "", .))) %>% 
                       add_column(`Economic Result`="Optimal First Replanting Year",.before = 1),
+                    #Row 6: IRR
+                    data.frame(`Economic Result`="Internal Rate of Return",
+                               `Treatment 1` = percent(coalesce(irr(tree_health_aggregated_orchard_cost_yield_and_returns$t1_net_returns), NA)),
+                               `Treatment 2` = percent(coalesce(irr(tree_health_aggregated_orchard_cost_yield_and_returns$t2_net_returns), NA)),
+                               `No Treatment`= percent(coalesce(irr(tree_health_aggregated_orchard_cost_yield_and_returns$nt_net_returns), NA)),
+                               `Disease Free`= percent(coalesce(irr(tree_health_aggregated_orchard_cost_yield_and_returns$max_net_returns), NA)),
+                               check.names=FALSE)
                     ),
                     options = list(dom = 't',
                                    columnDefs = list(
