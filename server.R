@@ -401,7 +401,7 @@ shinyServer(function(input, output, session) {
       )$value
       sum_roll_6 <- rollify(sum, window = 6)
       
-      output_data <<- bind_cols(
+      output_data <- bind_cols(
         #Col 1: yield
         data.frame(`Yield (avg/ac/yr)`=
           tree_health_aggregated_orchard_cost_yield_and_returns %>%
@@ -465,7 +465,7 @@ shinyServer(function(input, output, session) {
           check.names=FALSE)
       )
       
-      formatted_output_data <<- output_data %>%
+      formatted_output_data <- output_data %>%
         mutate(
           `Yield (avg/ac/yr)`=comma(`Yield (avg/ac/yr)`, accuracy=1),
           `Optimal First Replanting Year`=as.character(`Optimal First Replanting Year`),
