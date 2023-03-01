@@ -12,9 +12,10 @@ library(tidyverse)
 library(scales)
 library(shinyjqui)
 library(plotly)
-library(glue)
-library(tibbletime)
-library(jrvFinance)
+library(glue,       include.only = 'glue')
+library(tibbletime, include.only = 'rollify')
+library(jrvFinance, include.only = 'irr')
+source("scripts/gs_connect.R")
 
 shinyServer(function(input, output, session) {
   #  First input that is also updated by other inputs e.g. sum(annual_cost_{n})
@@ -216,8 +217,17 @@ shinyServer(function(input, output, session) {
   n_trees_in_orchard <- 576 # 24*24, number of trees planted in one acre
   max_yield <- reactive(input$max_yield/n_trees_in_orchard)
   
+  
+  last_t <- Sys.time()
+  check_enough_time_has_passed_since_last_run <- function(current_time=Sys.time(), 
+                                                          last_time=last_t){
+    tdiff <- difftime(current_time, last_time, units="secs")
+    tdiff <- as.numeric(tdiff, units="secs")
+    return(tdiff > 5)
+  }
+  
   tree_health_data <- reactive({
-    simulateControlScenarios(
+    simulation_inputs <- list(
       year_start = rv$start_year,
       year_end = rv$end_year + 1,
       t_disease_year = t_disease_year(),
@@ -242,11 +252,22 @@ shinyServer(function(input, output, session) {
       t2_cost = input$t2_cost,
       input_annual_price_change=input$percent_cost_change/100,
       output_annual_price_change=input$percent_price_change/100
-    )})
+    )
+    simulation_results <- do.call(simulateControlScenarios, simulation_inputs)
+    run_id <- rlang::hash(simulation_inputs)
+    ## Setup logging for simulation settings_changes
+    try({
+      if(check_enough_time_has_passed_since_last_run()){
+        # replant_years is a vector, causing a problem
+        simulation_inputs$replant_years <- paste(simulation_inputs$replant_years, collapse=',')
+        add_data_to_data_store(cbind(run_id=run_id, data.frame(simulation_inputs)))
+      }
+    })
+    return(list(data=simulation_results, id=run_id))})
   
     output$orchard_health <- renderPlotly({
       #Raster blocks with color indicating disease spread
-      data2 <- tree_health_data() %>%
+      data2 <- tree_health_data()$data %>%
         dplyr::select(-ends_with(c("net_returns", "realized_costs"))) %>%
         dplyr::filter(time==current_year()) %>%
         mutate(
@@ -336,7 +357,7 @@ shinyServer(function(input, output, session) {
       # if hovering, plot the tree's yield over time. If not hovering, plot the
       # table row selected, otherwise render the overall orchard yield.
       selected_row <- input$mytable_rows_selected
-      df <- tree_health_data() %>% select(-ends_with("tree_age"))
+      df <- tree_health_data()$data %>% select(-ends_with("tree_age"))
       
       if (!is.null(most_recent_x_y_hover())) {
         p <- plot_tree_yield(df, x_coord=most_recent_x_y_hover()[["x"]], y_coord=most_recent_x_y_hover()[["y"]])
@@ -365,7 +386,8 @@ shinyServer(function(input, output, session) {
     })
     
     output$mytable <- DT::renderDataTable({
-      tree_health_aggregated_orchard_cost_yield_and_returns <- tree_health_data() %>%
+      run_data_and_id <- tree_health_data()
+      tree_health_aggregated_orchard_cost_yield_and_returns <- run_data_and_id$data %>%
         select(-ends_with("tree_age")) %>%
         group_by(time) %>%
         summarize(across(-c(x,y),~sum(.,na.rm = T))) %>%
@@ -379,65 +401,90 @@ shinyServer(function(input, output, session) {
       )$value
       sum_roll_6 <- rollify(sum, window = 6)
       
-      DT::datatable(bind_rows(
-                    #Row 1: yield
-                    tree_health_aggregated_orchard_cost_yield_and_returns %>%
-                      summarize(across(-c(time),~mean(.,na.rm = T))) %>%
-                      mutate(across(everything(),~comma(.,accuracy=1))) %>%
-                      select(`Disease Free`,`No Treatment`,`Treatment 1`,`Treatment 2`) %>%
-                      add_column(`Economic Result`="Yield (avg/ac/yr)",.before = 1),
-                    #Row 2: net returns
-                    tree_health_aggregated_orchard_cost_yield_and_returns %>%
-                      summarize(across(-c(time),~mean(.,na.rm = T))) %>%
-                      mutate(across(everything(),~dollar(.,accuracy=1))) %>%
-                      select(ends_with("net_returns")) %>%
-                      rename(`Disease Free`=max_net_returns,`No Treatment`=nt_net_returns,`Treatment 1`=t1_net_returns,`Treatment 2`=t2_net_returns) %>%
-                      add_column(`Economic Result`="Net Returns (avg/ac/yr)",.before = 1),
-                    #Row 3: benefit of treatment
-                    tree_health_aggregated_orchard_cost_yield_and_returns %>%
-                      summarize(across(-c(time),~sum(.,na.rm = T)), n_years=n()) %>%
-                      mutate(t1_net_returns=(t1_net_returns - nt_net_returns)/n_years,
-                             t2_net_returns=(t2_net_returns - nt_net_returns)/n_years,
-                             across(everything(),~dollar(.,accuracy=1))) %>%
-                      select(ends_with("net_returns")) %>%
-                      rename(`Disease Free`=max_net_returns,`No Treatment`=nt_net_returns,`Treatment 1`=t1_net_returns,`Treatment 2`=t2_net_returns) %>%
-                      mutate(`Disease Free`="",
-                             `No Treatment`="") %>%
-                      add_column(`Economic Result`="Treatment Returns (avg/ac/yr)",.before = 1),
-                    #Row 4: net present value of returns at selected year
-                    tree_health_aggregated_orchard_cost_yield_and_returns %>%
-                      select(c(time, ends_with("net_returns"))) %>%
-                      filter(time >= current_year()) %>%
-                      # With a user-specified discount rate
-                      mutate(npv_multiplier=1/((1+input$percent_interest/100.0)**(time - current_year())),
-                             across(ends_with("net_returns"), ~(.*npv_multiplier), .names = "{.col}")) %>% 
-                      summarise(across(ends_with("net_returns"), ~dollar(sum(.),accuracy=1))) %>%
-                      rename(`Disease Free`=max_net_returns,`No Treatment`=nt_net_returns,`Treatment 1`=t1_net_returns,`Treatment 2`=t2_net_returns) %>%
-                      mutate(`Disease Free`="") %>%
-                      add_column(`Economic Result`="Net Present Value From Current Year ($/ac)", .before = 1),
-                    #Row 5: operating duration
-                    tree_health_aggregated_orchard_cost_yield_and_returns %>%
-                      filter((time > (rv$start_year + TREE_FIRST_FULL_YIELD_YEAR)) & (time < (rv$start_year + get_planting_years()[1]))) %>%
-                      # orders descending order so that the function cumsum sums starting from the end of the life of the orchard
-                      arrange(desc(time)) %>%
-                      mutate(across(ends_with("net_returns"), ~ifelse(n() >= 6, coalesce(sum_roll_6(.), cumsum(.)), NA), .names = "{.col}_cum")) %>%
-                      # chooses the first time the expected profit from the net returns is outweighed by the replanted yield
-                      # The plus one is to ensure that the year matches the year replanted (indexing problem)
-                      summarise(`Treatment 1` = as.character(first(time[t1_net_returns_cum  >= first_six_years_max_net_returns]) + 1),
-                                `Treatment 2` = as.character(first(time[t2_net_returns_cum  >= first_six_years_max_net_returns]) + 1),
-                                `No Treatment`= as.character(first(time[nt_net_returns_cum  >= first_six_years_max_net_returns]) + 1),
-                                `Disease Free`= as.character(first(time[max_net_returns_cum >= first_six_years_max_net_returns]) + 1)) %>%
-                      # TODO: decide if it makes sense or not to have the optimal replanting year when not replanting the entire orchard
-                      # mutate(across(everything(), ~ifelse(input$replanting_strategy %in% c('tree_replant'), "", .))) %>% 
-                      add_column(`Economic Result`="Optimal First Replanting Year",.before = 1),
-                    #Row 6: IRR
-                    data.frame(`Economic Result`="Internal Rate of Return",
-                               `Treatment 1` = percent(coalesce(irr(tree_health_aggregated_orchard_cost_yield_and_returns$t1_net_returns, r.guess=0.05), NA)),
-                               `Treatment 2` = percent(coalesce(irr(tree_health_aggregated_orchard_cost_yield_and_returns$t2_net_returns, r.guess=0.05), NA)),
-                               `No Treatment`= percent(coalesce(irr(tree_health_aggregated_orchard_cost_yield_and_returns$nt_net_returns, r.guess=0.05), NA)),
-                               `Disease Free`= percent(coalesce(irr(tree_health_aggregated_orchard_cost_yield_and_returns$max_net_returns, r.guess=0.05), NA)),
-                               check.names=FALSE)
-                    ),
+      output_data <- bind_cols(
+        #Col 1: yield
+        data.frame(`Yield (avg/ac/yr)`=
+          tree_health_aggregated_orchard_cost_yield_and_returns %>%
+          summarize(across(-c(time),~mean(.,na.rm = T))) %>%
+          select(`Disease Free`,`No Treatment`,`Treatment 1`,`Treatment 2`) %>%
+          t(), check.names=FALSE),
+        #Col 2: net returns
+        data.frame(`Net Returns (avg/ac/yr)`=
+          tree_health_aggregated_orchard_cost_yield_and_returns %>%
+          summarize(across(-c(time),~mean(.,na.rm = T))) %>%
+          select(`Disease Free`=max_net_returns,`No Treatment`=nt_net_returns,`Treatment 1`=t1_net_returns,`Treatment 2`=t2_net_returns) %>%
+          t(), check.names=FALSE),
+        #Row 3: benefit of treatment
+        data.frame(`Treatment Returns (avg/ac/yr)`=
+          tree_health_aggregated_orchard_cost_yield_and_returns %>%
+          summarize(across(-c(time),~sum(.,na.rm = T)), n_years=n()) %>%
+          mutate(t1_net_returns=(t1_net_returns - nt_net_returns)/n_years,
+                 t2_net_returns=(t2_net_returns - nt_net_returns)/n_years) %>%
+          #select(ends_with("net_returns")) %>%
+          mutate(max_net_returns=NA) %>%
+          select(`Disease Free`=max_net_returns,`No Treatment`=nt_net_returns,`Treatment 1`=t1_net_returns,`Treatment 2`=t2_net_returns) %>%
+          #mutate(`Disease Free`=NA,
+          #       `No Treatment`=NA) %>%
+          t(), check.names = FALSE),
+        #Col 4: net present value of returns at selected year
+        data.frame(`Net Present Value From Current Year ($/ac)`=
+          tree_health_aggregated_orchard_cost_yield_and_returns %>%
+          select(c(time, ends_with("net_returns"))) %>%
+          filter(time >= current_year()) %>%
+          # With a user-specified discount rate
+          mutate(npv_multiplier=1/((1+input$percent_interest/100.0)**(time - current_year())),
+                 across(ends_with("net_returns"), ~(.*npv_multiplier), .names = "{.col}")) %>% 
+          summarise(across(ends_with("net_returns"), ~sum(.))) %>%
+          mutate(max_net_returns=NA) %>%
+          select(`Disease Free`=max_net_returns,`No Treatment`=nt_net_returns,`Treatment 1`=t1_net_returns,`Treatment 2`=t2_net_returns) %>%
+          #mutate(`Disease Free`=NA) %>%
+          t(), check.names = FALSE),
+        #Col 5: operating duration
+        data.frame(`Optimal First Replanting Year`=
+          tree_health_aggregated_orchard_cost_yield_and_returns %>%
+          filter((time > (rv$start_year + TREE_FIRST_FULL_YIELD_YEAR)) & (time < (rv$start_year + get_planting_years()[1]))) %>%
+          # orders descending order so that the function cumsum sums starting from the end of the life of the orchard
+          arrange(desc(time)) %>%
+          mutate(across(ends_with("net_returns"), ~ifelse(n() >= 6, coalesce(sum_roll_6(.), cumsum(.)), NA), .names = "{.col}_cum")) %>%
+          # chooses the first time the expected profit from the net returns is outweighed by the replanted yield
+          # The plus one is to ensure that the year matches the year replanted (indexing problem)
+          summarise(`Disease Free`= first(time[max_net_returns_cum >= first_six_years_max_net_returns]) + 1,
+                    `No Treatment`= first(time[nt_net_returns_cum  >= first_six_years_max_net_returns]) + 1,
+                    `Treatment 1` = first(time[t1_net_returns_cum  >= first_six_years_max_net_returns]) + 1,
+                    `Treatment 2` = first(time[t2_net_returns_cum  >= first_six_years_max_net_returns]) + 1) %>%
+          # TODO: decide if it makes sense or not to have the optimal replanting year when not replanting the entire orchard
+          # mutate(across(everything(), ~ifelse(input$replanting_strategy %in% c('tree_replant'), "", .))) %>%
+          t(), check.names = FALSE),
+        #Col 6: IRR
+        data.frame(`Internal Rate of Return`=c(
+            coalesce(irr(tree_health_aggregated_orchard_cost_yield_and_returns$max_net_returns, r.guess=0.05), NA),
+            coalesce(irr(tree_health_aggregated_orchard_cost_yield_and_returns$nt_net_returns, r.guess=0.05), NA),
+            coalesce(irr(tree_health_aggregated_orchard_cost_yield_and_returns$t1_net_returns, r.guess=0.05), NA),
+            coalesce(irr(tree_health_aggregated_orchard_cost_yield_and_returns$t2_net_returns, r.guess=0.05), NA)),
+          row.names=c("Disease Free", "No Treatment", "Treatment 1", "Treatment 2"),
+          check.names=FALSE)
+      )
+      
+      formatted_output_data <- output_data %>%
+        mutate(
+          `Yield (avg/ac/yr)`=comma(`Yield (avg/ac/yr)`, accuracy=1),
+          `Optimal First Replanting Year`=as.character(`Optimal First Replanting Year`),
+          `Internal Rate of Return`=percent(`Internal Rate of Return`, accuracy=1),
+          across(c(`Net Returns (avg/ac/yr)`, `Treatment Returns (avg/ac/yr)`,`Net Present Value From Current Year ($/ac)`), ~dollar(., accuracy=1)),
+          ) %>% 
+        rownames_to_column("Economic Outcome") %>%
+        t() %>% data.frame() %>% rownames_to_column()
+      names(formatted_output_data) <- c("Economic Outcome", "Disease Free", "No Treatment", "Treatment 1", "Treatment 2")
+      
+      if (check_enough_time_has_passed_since_last_run()) {
+        add_data_to_data_store(
+          output_data %>%
+            rownames_to_column("Treatment Condition") %>% 
+            mutate(run_id=tree_health_data()$id, .before=1),
+          'results')
+      }
+      
+      DT::datatable(formatted_output_data[-1, ],
                     options = list(dom = 't',
                                    columnDefs = list(
                                      list(width = '40px', targets = 0),
