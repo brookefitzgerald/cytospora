@@ -1,11 +1,3 @@
-#
-# This is the server logic of a Shiny web application. You can run the
-# application by clicking 'Run App' above.
-#
-# Find out more about building applications with Shiny here:
-#
-#    http://shiny.rstudio.com/
-#
 
 library(shiny)
 library(tidyverse)
@@ -357,6 +349,36 @@ shinyServer(function(input, output, session) {
         }
       }
       session$sendCustomMessage("updateSliders", 'test') # this line updates the year sliders regularly
+    })
+    
+    vals = reactiveValues(x=NULL, y=NULL)
+    draw = reactiveVal(FALSE)
+    
+    observeEvent(input$input_yield_click, {
+      draw(!draw())
+      vals$x <- append(vals$x, NA)
+      vals$y <- append(vals$y, NA)
+    })
+    
+    observeEvent(input$draw, {
+      draw(input$draw)
+      vals$x <- append(vals$x, NA)
+      vals$y <- append(vals$y, NA)
+    })
+    
+    observeEvent(input$input_yield_reset, handlerExpr = {
+      vals$x <- NULL; vals$y <- NULL
+    })
+    
+    observeEvent(input$input_yield_hover, {
+      if (draw()) {
+        vals$x <- c(vals$x, input$input_yield_hover$x)
+        vals$y <- c(vals$y, input$input_yield_hover$y)
+      }
+    })
+    
+    output$input_yield_plot=renderPlot({
+      plot(x=vals$x, y=vals$y, xlim=c(rv$start_year, rv$end_year), ylim=c(0, 15000), ylab="y", xlab="Year", type="l", lwd=3)
     })
     
     output$tree_health <- renderPlotly({
