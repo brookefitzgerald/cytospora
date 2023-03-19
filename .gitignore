@@ -2,3 +2,7 @@ rsconnect
 .Rhistory
 .Rprofile
 scripts/gargle
+.DS_Store
+.Rproj.user/
+cytospora.Rproj
+scripts/.DS_Store
