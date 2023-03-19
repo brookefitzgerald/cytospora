@@ -74,7 +74,7 @@ ui <- tabsetPanel(
         tags$head(tags$style(HTML("table {table-layout: fixed;}"))),
         tags$head(tags$style(".datatables .display {margin-left: 0;}")),
         tags$head(includeHTML("www/google-analytics.html")),
-        tags$script(src="myscript.js"),
+        tags$script(src="js/update_slider_labels.js"),
         
         # Application title
         titlePanel("Cytospora Decision Support Tool"),

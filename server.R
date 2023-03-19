@@ -174,12 +174,13 @@ shinyServer(function(input, output, session) {
     updateSliderInput("replant_cycle_year_orchard", max=end_yr - start_yr, session=session)
     rv$prev_th <- input$time_horizon
     
-    # removes commas in the year sliders
-    session$sendCustomMessage("updateSliders", 'test')
+    # Removes commas in the year sliders
+    session$sendCustomMessage("updateSliders", '')
     })
-  observeEvent(input$year, session$sendCustomMessage("updateSliders", 'test'))
-  observeEvent(input$start_disease_year, session$sendCustomMessage("updateSliders", 'test'))
-  observeEvent(input$start_treatment_year, session$sendCustomMessage("updateSliders", 'test'))
+  # Remove commas in the year sliders when any of these years are changed
+  observeEvent(input$year, session$sendCustomMessage("updateSliders", ''))
+  observeEvent(input$start_disease_year, session$sendCustomMessage("updateSliders", ''))
+  observeEvent(input$start_treatment_year, session$sendCustomMessage("updateSliders", ''))
   
   # Render number of cycles conditional on cycle length and number of years in simulation
   
