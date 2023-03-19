@@ -1,16 +1,7 @@
-#
-# This is the user-interface definition of a Shiny web application. You can
-# run the application by clicking 'Run App' above.
-#
-# Find out more about building applications with Shiny here:
-#
-#    http://shiny.rstudio.com/
-#
-
+library(DT)
+library(plotly)
 library(shiny)
 library(shinyWidgets)
-library(plotly)
-library(DT)
 
 infoHoverLabel<- function(label, info_text=NA, link=NA){
   info_text <- ifelse(is.na(info_text), label, info_text)
@@ -95,7 +86,7 @@ ui <- tabsetPanel(
                                   infoHoverLabel("Average Mature Disease-Free Yield lbs/ac/year"),
                                   13000),
                     tags$p("To add more information about production costs or yield estimates, click the buttons below:",
-                           font_size=12),
+                           fontsize=12),
                     dropdownButton(
                       tags$h3("Production Cost Inputs"),
                       numericInput("annual_cost_1",
@@ -114,11 +105,13 @@ ui <- tabsetPanel(
                     ),
                     dropdownButton(
                         tags$h3("Annual Disease-Free Yield Estimates Over Time"),
-                        actionButton("input_yield_reset", "Reset Plot"),
-                        actionButton("input_yield_update", "Reset Plot"),
+                        tags$div(style="display:inline-block;vertical-align:top;",
+                                 actionButton("input_yield_reset", "Reset Plot"),
+                                 actionButton("input_yield_update", "Update Simulation"),
                         plotOutput("input_yield_plot", width = "400px", height = "400px",
                                    hover=hoverOpts(id = "input_yield_hover", delay = 100, delayType = "throttle", clip = TRUE, nullOutside = TRUE),
-                                   click="input_yield_click"),
+                                   click="input_yield_click")
+                        ),
                         circle=TRUE,
                         inline=TRUE,
                         status="primary",

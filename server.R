@@ -1,15 +1,17 @@
-
-library(shiny)
-library(tidyverse)
-library(scales)
-library(shinyjqui)
+library(future)
 library(plotly)
 library(promises)
-library(future)
+library(scales)
+library(shiny)
+library(shinyjqui)
+library(tidyverse)
+
 library(glue,       include.only = 'glue')
-library(tibbletime, include.only = 'rollify')
 library(jrvFinance, include.only = 'irr')
+library(tibbletime, include.only = 'rollify')
+
 source("scripts/gs_connect.R")
+
 plan(multisession)
 
 shinyServer(function(input, output, session) {
@@ -378,7 +380,31 @@ shinyServer(function(input, output, session) {
     })
     
     output$input_yield_plot=renderPlot({
-      plot(x=vals$x, y=vals$y, xlim=c(rv$start_year, rv$end_year), ylim=c(0, 15000), ylab="y", xlab="Year", type="l", lwd=3)
+      plot(x=vals$x, y=vals$y, xlim=c(rv$start_year, rv$end_year), ylim=c(0, 15000), ylab="Yield (lbs/ac)", xlab="Year", type="l", lwd=3)
+      if(length(vals$x)>1){
+        years_to_simulate <- rv$start_year:rv$end_year
+        n_years <- length(years_to_simulate)
+        indices <- sapply(years_to_simulate, function(i){which.max((floor(vals$x)==i))}) 
+        selected_yield <- vals$y[indices]
+        # If drawing speed is too fast, some years will not have associated points
+        # This code interpolates between values to get the average yield
+        for (i in which(indices==2)) {
+          following_indices <- indices[i:n_years]
+          next_y_index <- following_indices[following_indices>2][1]
+          previous_indices <- indices[1:(i-1)]
+          prev_y_index <- tail(previous_indices[previous_indices>2], 1)
+          interpolated_y_val <- coalesce(
+            mean(c(vals$y[prev_y_index], vals$y[next_y_index]), na.rm=TRUE),
+            input$max_yield
+          )
+          if (length(interpolated_y_val)>0){
+            if(!is.na(interpolated_y_val)){
+              selected_yield[i] <- interpolated_y_val
+            }
+          }
+        }
+        points(x=years_to_simulate, y=selected_yield, pch=19)
+      }
     })
     
     output$tree_health <- renderPlotly({
