@@ -12,10 +12,13 @@ library(tidyverse)
 library(scales)
 library(shinyjqui)
 library(plotly)
+library(promises)
+library(future)
 library(glue,       include.only = 'glue')
 library(tibbletime, include.only = 'rollify')
 library(jrvFinance, include.only = 'irr')
 source("scripts/gs_connect.R")
+plan(multisession)
 
 shinyServer(function(input, output, session) {
   #  First input that is also updated by other inputs e.g. sum(annual_cost_{n})
@@ -260,7 +263,9 @@ shinyServer(function(input, output, session) {
       if(check_enough_time_has_passed_since_last_run()){
         # replant_years is a vector, causing a problem
         simulation_inputs$replant_years <- paste(simulation_inputs$replant_years, collapse=',')
-        add_data_to_data_store(cbind(run_id=run_id, data.frame(simulation_inputs)))
+        future_promise({
+          add_data_to_data_store(cbind(run_id=run_id, data.frame(simulation_inputs)))
+        })
       }
     })
     return(list(data=simulation_results, id=run_id))})
@@ -401,6 +406,7 @@ shinyServer(function(input, output, session) {
       )$value
       sum_roll_6 <- rollify(sum, window = 6)
       
+      # Creates the table transposed so that the data can be numeric when loaded to spreadsheet
       output_data <- bind_cols(
         #Col 1: yield
         data.frame(`Yield (avg/ac/yr)`=
@@ -420,11 +426,7 @@ shinyServer(function(input, output, session) {
           summarize(across(-c(time),~sum(.,na.rm = T)), n_years=n()) %>%
           mutate(t1_net_returns=(t1_net_returns - nt_net_returns)/n_years,
                  t2_net_returns=(t2_net_returns - nt_net_returns)/n_years) %>%
-          #select(ends_with("net_returns")) %>%
-          mutate(max_net_returns=NA) %>%
-          select(`Disease Free`=max_net_returns,`No Treatment`=nt_net_returns,`Treatment 1`=t1_net_returns,`Treatment 2`=t2_net_returns) %>%
-          #mutate(`Disease Free`=NA,
-          #       `No Treatment`=NA) %>%
+          mutate(`Disease Free`=NA,`No Treatment`=NA,`Treatment 1`=t1_net_returns,`Treatment 2`=t2_net_returns, .keep="none") %>%
           t(), check.names = FALSE),
         #Col 4: net present value of returns at selected year
         data.frame(`Net Present Value From Current Year ($/ac)`=
@@ -435,9 +437,7 @@ shinyServer(function(input, output, session) {
           mutate(npv_multiplier=1/((1+input$percent_interest/100.0)**(time - current_year())),
                  across(ends_with("net_returns"), ~(.*npv_multiplier), .names = "{.col}")) %>% 
           summarise(across(ends_with("net_returns"), ~sum(.))) %>%
-          mutate(max_net_returns=NA) %>%
-          select(`Disease Free`=max_net_returns,`No Treatment`=nt_net_returns,`Treatment 1`=t1_net_returns,`Treatment 2`=t2_net_returns) %>%
-          #mutate(`Disease Free`=NA) %>%
+          mutate(`Disease Free`=NA,`No Treatment`=nt_net_returns,`Treatment 1`=t1_net_returns,`Treatment 2`=t2_net_returns, .keep="none") %>%
           t(), check.names = FALSE),
         #Col 5: operating duration
         data.frame(`Optimal First Replanting Year`=
@@ -465,26 +465,34 @@ shinyServer(function(input, output, session) {
           check.names=FALSE)
       )
       
-      formatted_output_data <- output_data %>%
-        mutate(
-          `Yield (avg/ac/yr)`=comma(`Yield (avg/ac/yr)`, accuracy=1),
-          `Optimal First Replanting Year`=as.character(`Optimal First Replanting Year`),
-          `Internal Rate of Return`=percent(`Internal Rate of Return`, accuracy=1),
-          across(c(`Net Returns (avg/ac/yr)`, `Treatment Returns (avg/ac/yr)`,`Net Present Value From Current Year ($/ac)`), ~dollar(., accuracy=1)),
-          ) %>% 
-        rownames_to_column("Economic Outcome") %>%
-        t() %>% data.frame() %>% rownames_to_column()
-      names(formatted_output_data) <- c("Economic Outcome", "Disease Free", "No Treatment", "Treatment 1", "Treatment 2")
       
       if (check_enough_time_has_passed_since_last_run()) {
-        add_data_to_data_store(
-          output_data %>%
-            rownames_to_column("Treatment Condition") %>% 
-            mutate(run_id=tree_health_data()$id, .before=1),
-          'results')
+        future_promise({
+          add_data_to_data_store(
+            output_data %>%
+              rownames_to_column("Treatment Condition") %>% 
+              mutate(run_id=run_data_and_id$id, .before=1),
+            'results')
+        })
       }
       
-      DT::datatable(formatted_output_data[-1, ],
+      # takes the data per treatment simulation and formats it into strings for the data table
+      formatted_output_data <- output_data %>%
+        mutate(
+          `Yield (avg/ac/yr)`             = comma(`Yield (avg/ac/yr)`, accuracy=1),
+          `Optimal First Replanting Year` = as.character(`Optimal First Replanting Year`),
+          `Internal Rate of Return`       = percent(`Internal Rate of Return`, accuracy=1),
+          across(
+            c(`Net Returns (avg/ac/yr)`, 
+              `Treatment Returns (avg/ac/yr)`,
+              `Net Present Value From Current Year ($/ac)`
+            ),                           ~ dollar(., accuracy=1)),
+        ) %>% 
+        rownames_to_column("Economic Outcome") %>% # preparation for the transpose
+        t() %>% data.frame() %>% rownames_to_column() 
+      names(formatted_output_data) <- c("Economic Outcome", "Disease Free", "No Treatment", "Treatment 1", "Treatment 2")
+      
+      DT::datatable(formatted_output_data[-1, ], # Gets rid of the now redundant row names
                     options = list(dom = 't',
                                    columnDefs = list(
                                      list(width = '40px', targets = 0),
