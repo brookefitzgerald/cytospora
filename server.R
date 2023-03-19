@@ -202,7 +202,71 @@ shinyServer(function(input, output, session) {
     lapply(to_hide, hide_ui)
     lapply(to_show, show_ui)
   })
-
+  
+  n_trees_in_orchard <- 576 # 24*24, number of trees planted in one acre
+  input_yield_values <- reactiveVal(NULL)
+  vals = reactiveValues(x=NULL, y=NULL, selectedYield=NULL)
+  draw = reactiveVal(FALSE)
+  
+  observeEvent(input$input_yield_update, {
+    print(vals$selectedYield)
+    print(vals$selectedYield/n_trees_in_orchard)
+    input_yield_values(vals$selectedYield/rep(n_trees_in_orchard, length(vals$selectedYield)))
+  })
+  
+  observeEvent(input$input_yield_click, {
+    draw(!draw())
+    vals$x <- append(vals$x, NA)
+    vals$y <- append(vals$y, NA)
+  })
+  
+  observeEvent(input$draw, {
+    draw(input$draw)
+    vals$x <- append(vals$x, NA)
+    vals$y <- append(vals$y, NA)
+  })
+  
+  observeEvent(input$input_yield_reset, handlerExpr = {
+    vals$x <- NULL; vals$y <- NULL; input_yield_values(NULL);
+  })
+  
+  observeEvent(input$input_yield_hover, {
+    if (draw()) {
+      vals$x <- c(vals$x, input$input_yield_hover$x)
+      vals$y <- c(vals$y, input$input_yield_hover$y)
+    }
+  })
+  
+  output$input_yield_plot=renderPlot({
+    plot(x=vals$x, y=vals$y, xlim=c(rv$start_year, rv$end_year), ylim=c(0, 15000), ylab="Yield (lbs/ac)", xlab="Year", type="l", lwd=3)
+    if(length(vals$x)>1){
+      years_to_simulate <- rv$start_year:rv$end_year
+      n_years <- length(years_to_simulate)
+      indices <- sapply(years_to_simulate, function(i){which.max((floor(vals$x)==i))}) 
+      selected_yield <- vals$y[indices]
+      # If drawing speed is too fast, some years will not have associated points
+      # This code interpolates between values to get the average yield
+      for (i in which(indices==2)) {
+        following_indices <- indices[i:n_years]
+        next_y_index <- following_indices[following_indices>2][1]
+        previous_indices <- indices[1:(i-1)]
+        prev_y_index <- tail(previous_indices[previous_indices>2], 1)
+        interpolated_y_val <- coalesce(
+          mean(c(vals$y[prev_y_index], vals$y[next_y_index]), na.rm=TRUE),
+          input$max_yield
+        )
+        if (length(interpolated_y_val)>0){
+          if(!is.na(interpolated_y_val)){
+            selected_yield[i] <- interpolated_y_val
+          }
+        }
+        
+      }
+      vals$selectedYield <- selected_yield
+      points(x=years_to_simulate, y=selected_yield, pch=19)
+    }
+  })
+  
   
   ####### Run simulations #######
   # Note that the reactive context means that whenever the relevant inputs 
@@ -212,9 +276,6 @@ shinyServer(function(input, output, session) {
   t_treatment_year <- reactive(input$start_treatment_year - rv$start_year + 1)
   current_year <- reactive(input$year)
   output_price <- reactive(input$output_price)
-  n_trees_in_orchard <- 576 # 24*24, number of trees planted in one acre
-  max_yield <- reactive(input$max_yield/n_trees_in_orchard)
-  
   
   last_t <- Sys.time()
   check_enough_time_has_passed_since_last_run <- function(current_time=Sys.time(), 
@@ -225,6 +286,12 @@ shinyServer(function(input, output, session) {
   }
   
   tree_health_data <- reactive({
+    isolate(input_yield_values())
+    if(is.null(input_yield_values())){
+      per_year_per_tree_max_yield <- rep(input$max_yield/n_trees_in_orchard, rv$end_year - rv$start_year)
+    } else {
+      per_year_per_tree_max_yield <- input_yield_values()
+    }
     simulation_inputs <- list(
       year_start = rv$start_year,
       year_end = rv$end_year + 1,
@@ -233,7 +300,7 @@ shinyServer(function(input, output, session) {
       disease_random_share_of_spread=input$disease_random_share_of_spread/100, # function expects a percentage (fraction)
       disease_spread_rate = input$disease_spread_rate/100,
       disease_growth_rate = input$disease_growth_rate/100,
-      max_yield = input$max_yield/n_trees_in_orchard,
+      max_yield = per_year_per_tree_max_yield,
       output_price = output_price(),
       annual_cost = input$annual_cost,
       replanting_strategy = input$replanting_strategy,
@@ -256,8 +323,9 @@ shinyServer(function(input, output, session) {
     ## Setup logging for simulation settings_changes
     try({
       if(check_enough_time_has_passed_since_last_run()){
-        # replant_years is a vector, causing a problem
+        # replant_years and max_yield are vectors, causing a problem
         simulation_inputs$replant_years <- paste(simulation_inputs$replant_years, collapse=',')
+        simulation_inputs$max_yield <- paste(simulation_inputs$max_yield, collapse=',')
         future_promise({
           add_data_to_data_store(cbind(run_id=run_id, data.frame(simulation_inputs)))
         })
@@ -351,60 +419,6 @@ shinyServer(function(input, output, session) {
         }
       }
       session$sendCustomMessage("updateSliders", 'test') # this line updates the year sliders regularly
-    })
-    
-    vals = reactiveValues(x=NULL, y=NULL)
-    draw = reactiveVal(FALSE)
-    
-    observeEvent(input$input_yield_click, {
-      draw(!draw())
-      vals$x <- append(vals$x, NA)
-      vals$y <- append(vals$y, NA)
-    })
-    
-    observeEvent(input$draw, {
-      draw(input$draw)
-      vals$x <- append(vals$x, NA)
-      vals$y <- append(vals$y, NA)
-    })
-    
-    observeEvent(input$input_yield_reset, handlerExpr = {
-      vals$x <- NULL; vals$y <- NULL
-    })
-    
-    observeEvent(input$input_yield_hover, {
-      if (draw()) {
-        vals$x <- c(vals$x, input$input_yield_hover$x)
-        vals$y <- c(vals$y, input$input_yield_hover$y)
-      }
-    })
-    
-    output$input_yield_plot=renderPlot({
-      plot(x=vals$x, y=vals$y, xlim=c(rv$start_year, rv$end_year), ylim=c(0, 15000), ylab="Yield (lbs/ac)", xlab="Year", type="l", lwd=3)
-      if(length(vals$x)>1){
-        years_to_simulate <- rv$start_year:rv$end_year
-        n_years <- length(years_to_simulate)
-        indices <- sapply(years_to_simulate, function(i){which.max((floor(vals$x)==i))}) 
-        selected_yield <- vals$y[indices]
-        # If drawing speed is too fast, some years will not have associated points
-        # This code interpolates between values to get the average yield
-        for (i in which(indices==2)) {
-          following_indices <- indices[i:n_years]
-          next_y_index <- following_indices[following_indices>2][1]
-          previous_indices <- indices[1:(i-1)]
-          prev_y_index <- tail(previous_indices[previous_indices>2], 1)
-          interpolated_y_val <- coalesce(
-            mean(c(vals$y[prev_y_index], vals$y[next_y_index]), na.rm=TRUE),
-            input$max_yield
-          )
-          if (length(interpolated_y_val)>0){
-            if(!is.na(interpolated_y_val)){
-              selected_yield[i] <- interpolated_y_val
-            }
-          }
-        }
-        points(x=years_to_simulate, y=selected_yield, pch=19)
-      }
     })
     
     output$tree_health <- renderPlotly({

@@ -49,7 +49,7 @@ tree_sim <- function(o_rows=24, #Block dimension row
                      t_disease_year=1, #Year infection starts in the orchard
                      t_treatment_year=1, # Year the disease begins to be treated
                      inf_starts=2,   #Number of infectious starts
-                     max_yield=15,   #Yield at maturity
+                     max_yield=rep(15, 40),  #Yield at maturity per year
                      disease_random_share_of_spread=0.0, # Share of disease spread that is random vs. only to adjacent trees. (0 is completely determined by neighbors, 1 is completely random)
                      disease_spread_rate=.10, #Rate of disease spread to adjacent trees in all directions (can be made more flexible)
                      disease_growth_rate=.2, #Rate of disease growth within a tree
@@ -80,9 +80,9 @@ tree_sim <- function(o_rows=24, #Block dimension row
     }
   }
   
-  grow_trees <- function(tree_age_matrix){
+  grow_trees <- function(tree_age_matrix, year){
     #Returns tree growth as a function of age for the given maximum yield
-    grow_tree_function(tree_age_matrix, max_yield=max_yield, tree_end_year=TH)
+    grow_tree_function(tree_age_matrix, max_yield=max_yield[year], tree_end_year=TH)
   }
   
   #Disease spread matrix 
@@ -131,7 +131,7 @@ tree_sim <- function(o_rows=24, #Block dimension row
     age_shell[[t+1]] <- age_shell[[t]] + 1
     
     #Grow trees subject to damage
-    tree_shell[[t+1]] <- tree_shell[[t]] + grow_trees(age_shell[[t]]) - disease_shell[,,t]
+    tree_shell[[t+1]] <- tree_shell[[t]] + grow_trees(age_shell[[t]], t) - disease_shell[,,t]
     
     # Treatment costs for all years that we are treating the disease
     control_effort <- ifelse(t >= t_treatment_year, activated_control_effort, 0.0)
