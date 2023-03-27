@@ -327,7 +327,7 @@ shinyServer(function(input, output, session) {
         simulation_inputs$replant_years <- paste(simulation_inputs$replant_years, collapse=',')
         simulation_inputs$max_yield <- paste(simulation_inputs$max_yield, collapse=',')
         future_promise({
-          add_data_to_data_store(cbind(run_id=run_id, data.frame(simulation_inputs)))
+          add_data_to_data_store(cbind(ts=Sys.time(), run_id=run_id, data.frame(simulation_inputs)))
         })
       }
     })
@@ -534,7 +534,7 @@ shinyServer(function(input, output, session) {
           add_data_to_data_store(
             output_data %>%
               rownames_to_column("Treatment Condition") %>% 
-              mutate(run_id=run_data_and_id$id, .before=1),
+              mutate(ts=Sys.time(), run_id=run_data_and_id$id, .before=1),
             'results')
         })
       }
