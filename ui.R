@@ -1,16 +1,7 @@
-#
-# This is the user-interface definition of a Shiny web application. You can
-# run the application by clicking 'Run App' above.
-#
-# Find out more about building applications with Shiny here:
-#
-#    http://shiny.rstudio.com/
-#
-
+library(DT)
+library(plotly)
 library(shiny)
 library(shinyWidgets)
-library(plotly)
-library(DT)
 
 infoHoverLabel<- function(label, info_text=NA, link=NA){
   info_text <- ifelse(is.na(info_text), label, info_text)
@@ -74,7 +65,8 @@ ui <- tabsetPanel(
         tags$head(tags$style(HTML("table {table-layout: fixed;}"))),
         tags$head(tags$style(".datatables .display {margin-left: 0;}")),
         tags$head(includeHTML("www/google-analytics.html")),
-        tags$script(src="myscript.js"),
+        tags$script(src="js/update_slider_labels.js"),
+        tags$script(src="js/draw_input_data.js"),
         
         # Application title
         titlePanel("Cytospora Decision Support Tool"),
@@ -90,6 +82,11 @@ ui <- tabsetPanel(
                                  # Using infoHoverLabel from ui.R to add an informational tooltip
                                  infoHoverLabel("Annual Production Cost ($/ac/yr)"),
                                  value=4885 + 1000),
+                    numericInput("max_yield",
+                                  infoHoverLabel("Average Mature Disease-Free Yield lbs/ac/year"),
+                                  13000),
+                    tags$p("To add more information about production costs or yield estimates, click the buttons below:",
+                           style = "font-size:16px;"),
                     dropdownButton(
                       tags$h3("Production Cost Inputs"),
                       numericInput("annual_cost_1",
@@ -99,38 +96,53 @@ ui <- tabsetPanel(
                                    infoHoverLabel("Water Cost ($/ac/yr)"),
                                    value=1000),
                       circle=TRUE,
+                      inline=TRUE,
                       status="primary",
                       icon=icon("gear"),
                       size='sm',
                       width="300px",
-                      tooltip=tooltipOptions(title="Click for help with budgeting production cost")
+                      tooltip=tooltipOptions(title="Click for help with budgeting production costs")
                     ),
-                numericInput("max_yield",
-                              infoHoverLabel("Mature Disease-Free Yield lbs/ac/year"),
-                              13000),
-                numericInput("output_price",
-                             infoHoverLabel("Peach Price ($/lb)"),
-                             value=1.1),
-                sliderInput("percent_interest",
-                             infoHoverLabel("Interest Rate (%)",
-                                            "Interest rate used to calculate the net present value of the orchard. Consider using a nominal interest rate that includes inflation. For more information, click this icon for an Investopedia article about interest rates.",
-                                            link="https://www.investopedia.com/terms/i/interestrate.asp"),
-                             value=3,
-                             min=0,
-                             max=20),
-                sliderInput("percent_price_change",
-                             infoHoverLabel("Price Change (%)",
-                                            "Annual percentage change in output peach prices."),
-                             value=0,
-                             min=-20,
-                             max=20),
-                sliderInput("percent_cost_change",
-                             infoHoverLabel("Cost Change (%)",
-                                            "Annual percentage change in costs after the first year."),
-                             value=0,
-                             min=-20,
-                             max=20),
-                actionButton("costs_menu_hide", "Close menu")
+                    dropdownButton(
+                        tags$h3("Annual Mature, Disease-Free Yield Estimates Over Time Per Acre"),
+                        tags$div(style="display:inline-block;vertical-align:top;",
+                                 actionButton("input_yield_reset", "Reset Plot"),
+                                 actionButton("input_yield_update", "Update Simulation"),
+                        plotOutput("input_yield_plot", width = "400px", height = "400px",
+                                   hover=hoverOpts(id = "input_yield_hover", delay = 100, delayType = "throttle", clip = TRUE, nullOutside = TRUE),
+                                   click="input_yield_click")
+                        ),
+                        circle=TRUE,
+                        inline=TRUE,
+                        status="primary",
+                        icon=icon("chart-line"),
+                        size='sm',
+                        width="450px",
+                        tooltip=tooltipOptions(title="Click to draw estimates for yearly yield")
+                    ),
+                    numericInput("output_price",
+                                 infoHoverLabel("Peach Price ($/lb)"),
+                                 value=1.1),
+                    sliderInput("percent_interest",
+                                 infoHoverLabel("Interest Rate (%)",
+                                                "Interest rate used to calculate the net present value of the orchard. Consider using a nominal interest rate that includes inflation. For more information, click this icon for an Investopedia article about interest rates.",
+                                                link="https://www.investopedia.com/terms/i/interestrate.asp"),
+                                 value=3,
+                                 min=0,
+                                 max=20),
+                    sliderInput("percent_price_change",
+                                 infoHoverLabel("Price Change (%)",
+                                                "Annual percentage change in output peach prices."),
+                                 value=0,
+                                 min=-20,
+                                 max=20),
+                    sliderInput("percent_cost_change",
+                                 infoHoverLabel("Cost Change (%)",
+                                                "Annual percentage change in costs after the first year."),
+                                 value=0,
+                                 min=-20,
+                                 max=20),
+                    actionButton("costs_menu_hide", "Close menu")
                 ),
                 tags$br(),
                 tags$br(),

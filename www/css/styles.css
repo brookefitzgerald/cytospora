@@ -48,6 +48,10 @@ p {
   transform : rotate(270deg);
 }
 
+#plot {
+  touch-action: none;
+}
+
 /*In order to update the year slider min/maxes via the time horizon slider bounds,
 the input is created in server.R (not ui.R like all the other inputs). This 
 causes an error as the rest of the code attempts to access the value of time years
