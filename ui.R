@@ -86,7 +86,7 @@ ui <- tabsetPanel(
                                   infoHoverLabel("Average Mature Disease-Free Yield lbs/ac/year"),
                                   13000),
                     tags$p("To add more information about production costs or yield estimates, click the buttons below:",
-                           fontsize=12),
+                           style = "font-size:16px;"),
                     dropdownButton(
                       tags$h3("Production Cost Inputs"),
                       numericInput("annual_cost_1",
@@ -104,7 +104,7 @@ ui <- tabsetPanel(
                       tooltip=tooltipOptions(title="Click for help with budgeting production costs")
                     ),
                     dropdownButton(
-                        tags$h3("Annual Disease-Free Yield Estimates Over Time"),
+                        tags$h3("Annual Mature, Disease-Free Yield Estimates Over Time Per Acre"),
                         tags$div(style="display:inline-block;vertical-align:top;",
                                  actionButton("input_yield_reset", "Reset Plot"),
                                  actionButton("input_yield_update", "Update Simulation"),

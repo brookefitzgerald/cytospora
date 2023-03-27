@@ -130,7 +130,7 @@ tree_sim <- function(o_rows=24, #Block dimension row
     #Trees age each year
     age_shell[[t+1]] <- age_shell[[t]] + 1
     
-    #Grow trees subject to damage
+    #Grow trees subject to yearly max yield
     tree_shell[[t+1]] <- tree_shell[[t]] + grow_trees(age_shell[[t]], t) - disease_shell[,,t]
     
     # Treatment costs for all years that we are treating the disease
@@ -189,15 +189,18 @@ tree_sim <- function(o_rows=24, #Block dimension row
     tree_shell[[t+1]] <- pmax(zeros(o_rows, o_cols), tree_shell[[t+1]]) # set negative yields to zero
   }
   
-  tree_health <- pmap_df(list(tree_shell, c(1:TH), cost_shell, age_shell),
-                         function(tree, cntr, yearly_cost, age){
+  tree_health <- pmap_df(list(tree_shell, c(1:TH), cost_shell, age_shell, max_yield),
+                         function(tree, cntr, yearly_cost, age, yearly_max_yield){
                            # subtracting one from the yield so that the initial yield is truly 0
                            # (non-zero yield is initially necessary for the growth function to work)
                            # but making sure that it doesn't go negative (some trees  
                            # impacted by disease can have a yield < 1)
                            bind_cols(
                              expand_grid(x=c(1:o_cols),y=c(1:o_rows)),
-                             yield=pmax(as.vector(tree)-1, integer(length(as.vector(tree)))),
+                             yield=pmin( # bounded between 0 and yearly max yield
+                               pmax(as.vector(tree)-1, 0),
+                               yearly_max_yield
+                             ),
                              tree_age=as.vector(age)) %>%
                              add_column(
                                time=start_year + cntr - 1,

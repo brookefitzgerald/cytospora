@@ -288,7 +288,7 @@ shinyServer(function(input, output, session) {
   tree_health_data <- reactive({
     isolate(input_yield_values())
     if(is.null(input_yield_values())){
-      per_year_per_tree_max_yield <- rep(input$max_yield/n_trees_in_orchard, rv$end_year - rv$start_year)
+      per_year_per_tree_max_yield <- rep(input$max_yield/n_trees_in_orchard, rv$end_year - rv$start_year + 1)
     } else {
       per_year_per_tree_max_yield <- input_yield_values()
     }
