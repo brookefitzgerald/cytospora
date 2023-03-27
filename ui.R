@@ -105,6 +105,7 @@ ui <- tabsetPanel(
                     ),
                     dropdownButton(
                         tags$h3("Annual Mature, Disease-Free Yield Estimates Over Time Per Acre"),
+                        tags$p("Click and draw yearly maximum yield estimates below. This can simulate bad yield years due to cold or higher yields over time.", style = "font-size:12px;"),
                         tags$div(style="display:inline-block;vertical-align:top;",
                                  actionButton("input_yield_reset", "Reset Plot"),
                                  actionButton("input_yield_update", "Update Simulation"),
