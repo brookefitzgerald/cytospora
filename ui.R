@@ -90,10 +90,19 @@ ui <- tabsetPanel(
                     dropdownButton(
                       tags$h3("Production Cost Inputs"),
                       numericInput("annual_cost_1",
-                                   infoHoverLabel("Labor Cost ($/ac/yr)"),
-                                   value=4885),
+                                   infoHoverLabel("Non-Harvest Labor Cost ($/ac/yr)", "Labor Cost includes cost of pruning, applying fertilizer, and general orchard maintenance."),
+                                   value=2964),
                       numericInput("annual_cost_2",
+                                   infoHoverLabel("Harvest Cost ($/ac/yr)", "Cost of harvest, including labor."),
+                                   value=1620),
+                      numericInput("annual_cost_3",
                                    infoHoverLabel("Water Cost ($/ac/yr)"),
+                                   value=210),
+                      numericInput("annual_cost_4",
+                                   infoHoverLabel("Fertilizer Cost ($/ac/yr)", "Report fertilizer cost on avrage, including higher fertilizer cost when trees are young."),
+                                   value=91),
+                      numericInput("annual_cost_5",
+                                   infoHoverLabel("Other Costs ($/ac/yr)", "These costs include insurance, equipment operating expenses, land costs, and other material expenses."),
                                    value=1000),
                       circle=TRUE,
                       inline=TRUE,
@@ -227,8 +236,8 @@ ui <- tabsetPanel(
                   tags$div(
                     id="tree_replant_inputs",
                     numericInput("replant_cost_tree",
-                                 infoHoverLabel("Tree Replanting Cost"),
-                                 20),
+                                 infoHoverLabel("Tree Replanting Cost", "Cost to replant tree, including removal"),
+                                 45),
                     
                     radioButtons("replant_tree_block_size",
                                  infoHoverLabel("Number of additional surrounding trees to replant",
@@ -244,7 +253,7 @@ ui <- tabsetPanel(
                       id="tree_remove_inputs",
                       numericInput("remove_cost_tree",
                                    infoHoverLabel("Tree Removal Cost"),
-                                   10)
+                                   30)
                       ),
                   actionButton("replanting_menu_hide", "Close menu"),
                 )

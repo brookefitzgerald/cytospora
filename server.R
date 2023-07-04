@@ -19,12 +19,20 @@ shinyServer(function(input, output, session) {
   updateTotalAnnualCost <- function(input_name){
     observeEvent(input[[input_name]], {
       updateTextInput("annual_cost", 
-                      value=input$annual_cost_1+input$annual_cost_2, 
+                      value=
+                        input$annual_cost_1 +
+                        input$annual_cost_2 +
+                        input$annual_cost_3 +
+                        input$annual_cost_4 +
+                        input$annual_cost_5,
                       session=session)
     })
   }
   updateTotalAnnualCost('annual_cost_1')
   updateTotalAnnualCost('annual_cost_2')
+  updateTotalAnnualCost('annual_cost_3')
+  updateTotalAnnualCost('annual_cost_4')
+  updateTotalAnnualCost('annual_cost_5')
   
   hide_ui <- function(ui, ...){jqui_hide(ui=ui, effect="blind", ...)}
   show_ui <- function(ui, ...){jqui_show(ui=ui, effect="blind", ...)}
@@ -508,7 +516,7 @@ shinyServer(function(input, output, session) {
           filter((time > (rv$start_year + TREE_FIRST_FULL_YIELD_YEAR)) & (time < (rv$start_year + get_planting_years()[1]))) %>%
           # orders descending order so that the function cumsum sums starting from the end of the life of the orchard
           arrange(desc(time)) %>%
-          mutate(across(ends_with("net_returns"), ~ifelse(n() >= 6, coalesce(sum_roll_6(.), cumsum(.)), NA), .names = "{.col}_cum")) %>%
+          mutate(across(ends_with("net_returns"), ~coalesce(sum_roll_6(.), cumsum(.)), .names = "{.col}_cum")) %>%
           # chooses the first time the expected profit from the net returns is outweighed by the replanted yield
           # The plus one is to ensure that the year matches the year replanted (indexing problem)
           summarise(`Disease Free`= first(time[max_net_returns_cum >= first_six_years_max_net_returns]) + 1,
