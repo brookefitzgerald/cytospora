@@ -3,6 +3,7 @@ library(plotly)
 library(promises)
 library(scales)
 library(shiny)
+library(shinyjs)
 library(shinyjqui)
 library(tidyverse)
 
@@ -222,20 +223,19 @@ shinyServer(function(input, output, session) {
     input_yield_values(vals$selectedYield/rep(n_trees_in_orchard, length(vals$selectedYield)))
   })
   
-  observeEvent(input$input_yield_click, {
-    draw(!draw())
-    vals$x <- append(vals$x, NA)
-    vals$y <- append(vals$y, NA)
+  observeEvent(input$input_yield_reset, handlerExpr = {
+    vals$x <- NULL; vals$y <- NULL; input_yield_values(NULL);
   })
+  
+  
+  onevent("mousedown", "input_yield_plot", {draw(T)})
+  onevent("mouseup",   "input_yield_plot", {draw(F)})
+  onevent("mouseexit", "input_yield_plot", {draw(F)})
   
   observeEvent(input$draw, {
     draw(input$draw)
     vals$x <- append(vals$x, NA)
     vals$y <- append(vals$y, NA)
-  })
-  
-  observeEvent(input$input_yield_reset, handlerExpr = {
-    vals$x <- NULL; vals$y <- NULL; input_yield_values(NULL);
   })
   
   observeEvent(input$input_yield_hover, {
@@ -249,29 +249,12 @@ shinyServer(function(input, output, session) {
     plot(x=vals$x, y=vals$y, xlim=c(rv$start_year, rv$end_year), ylim=c(0, 15000), ylab="Yield (lbs/ac)", xlab="Year", type="l", lwd=3)
     if(length(vals$x)>1){
       years_to_simulate <- rv$start_year:rv$end_year
-      n_years <- length(years_to_simulate)
-      indices <- sapply(years_to_simulate, function(i){which.max((floor(vals$x)==i))}) 
-      selected_yield <- vals$y[indices]
-      # If drawing speed is too fast, some years will not have associated points
-      # This code interpolates between values to get the average yield
-      for (i in which(indices==2)) {
-        following_indices <- indices[i:n_years]
-        next_y_index <- following_indices[following_indices>2][1]
-        previous_indices <- indices[1:(i-1)]
-        prev_y_index <- tail(previous_indices[previous_indices>2], 1)
-        interpolated_y_val <- coalesce(
-          mean(c(vals$y[prev_y_index], vals$y[next_y_index]), na.rm=TRUE),
-          input$max_yield
-        )
-        if (length(interpolated_y_val)>0){
-          if(!is.na(interpolated_y_val)){
-            selected_yield[i] <- interpolated_y_val
-          }
-        }
-        
-      }
-      vals$selectedYield <- selected_yield
-      points(x=years_to_simulate, y=selected_yield, pch=19)
+      
+      drawn_dfm <- data.frame(x=vals$x, y=vals$y) %>% mutate(x=round(x)) %>% group_by(x) %>% summarize(y=mean(y))
+      interpolated_dfm <- data.frame(x=years_to_simulate) %>%
+        left_join(drawn_dfm, by="x") %>% 
+        mutate(y=approx(x, y, x, rule=2)$y)
+      points(x=interpolated_dfm$x, y=interpolated_dfm$y, pch=19)
     }
   })
   

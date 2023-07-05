@@ -1,6 +1,7 @@
 library(DT)
 library(plotly)
 library(shiny)
+library(shinyjs,       include.only = 'useShinyjs')
 library(shinyWidgets)
 
 infoHoverLabel<- function(label, info_text=NA, link=NA){
@@ -67,7 +68,7 @@ ui <- tabsetPanel(
         tags$head(includeHTML("www/google-analytics.html")),
         tags$script(src="js/update_slider_labels.js"),
         tags$script(src="js/draw_input_data.js"),
-        
+        useShinyjs(),
         # Application title
         titlePanel("Cytospora Decision Support Tool"),
     
@@ -119,8 +120,7 @@ ui <- tabsetPanel(
                                  actionButton("input_yield_reset", "Reset Plot"),
                                  actionButton("input_yield_update", "Update Simulation"),
                         plotOutput("input_yield_plot", width = "400px", height = "400px",
-                                   hover=hoverOpts(id = "input_yield_hover", delay = 100, delayType = "throttle", clip = TRUE, nullOutside = TRUE),
-                                   click="input_yield_click")
+                                   hover=hoverOpts(id = "input_yield_hover", delay = 100, delayType = "throttle", clip = TRUE, nullOutside = TRUE))
                         ),
                         circle=TRUE,
                         inline=TRUE,
