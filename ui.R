@@ -1,6 +1,7 @@
 library(DT)
 library(plotly)
 library(shiny)
+library(shinyjs)
 library(shinyWidgets)
 
 infoHoverLabel<- function(label, info_text=NA, link=NA){
@@ -67,7 +68,7 @@ ui <- tabsetPanel(
         tags$head(includeHTML("www/google-analytics.html")),
         tags$script(src="js/update_slider_labels.js"),
         tags$script(src="js/draw_input_data.js"),
-        
+        useShinyjs(),
         # Application title
         titlePanel("Cytospora Decision Support Tool"),
     
@@ -90,10 +91,19 @@ ui <- tabsetPanel(
                     dropdownButton(
                       tags$h3("Production Cost Inputs"),
                       numericInput("annual_cost_1",
-                                   infoHoverLabel("Labor Cost ($/ac/yr)"),
-                                   value=4885),
+                                   infoHoverLabel("Non-Harvest Labor Cost ($/ac/yr)", "Labor Cost includes cost of pruning, applying fertilizer, and general orchard maintenance."),
+                                   value=2964),
                       numericInput("annual_cost_2",
+                                   infoHoverLabel("Harvest Cost ($/ac/yr)", "Cost of harvest, including labor."),
+                                   value=1620),
+                      numericInput("annual_cost_3",
                                    infoHoverLabel("Water Cost ($/ac/yr)"),
+                                   value=210),
+                      numericInput("annual_cost_4",
+                                   infoHoverLabel("Fertilizer Cost ($/ac/yr)", "Report fertilizer cost on avrage, including higher fertilizer cost when trees are young."),
+                                   value=91),
+                      numericInput("annual_cost_5",
+                                   infoHoverLabel("Other Costs ($/ac/yr)", "These costs include insurance, equipment operating expenses, land costs, and other material expenses."),
                                    value=1000),
                       circle=TRUE,
                       inline=TRUE,
@@ -110,8 +120,7 @@ ui <- tabsetPanel(
                                  actionButton("input_yield_reset", "Reset Plot"),
                                  actionButton("input_yield_update", "Update Simulation"),
                         plotOutput("input_yield_plot", width = "400px", height = "400px",
-                                   hover=hoverOpts(id = "input_yield_hover", delay = 100, delayType = "throttle", clip = TRUE, nullOutside = TRUE),
-                                   click="input_yield_click")
+                                   hover=hoverOpts(id = "input_yield_hover", delay = 100, delayType = "throttle", clip = TRUE, nullOutside = TRUE))
                         ),
                         circle=TRUE,
                         inline=TRUE,
@@ -125,21 +134,21 @@ ui <- tabsetPanel(
                                  infoHoverLabel("Peach Price ($/lb)"),
                                  value=1.1),
                     sliderInput("percent_interest",
-                                 infoHoverLabel("Interest Rate (%)",
+                                 infoHoverLabel("Interest Rate On Borrowing (%)",
                                                 "Interest rate used to calculate the net present value of the orchard. Consider using a nominal interest rate that includes inflation. For more information, click this icon for an Investopedia article about interest rates.",
                                                 link="https://www.investopedia.com/terms/i/interestrate.asp"),
                                  value=3,
                                  min=0,
                                  max=20),
                     sliderInput("percent_price_change",
-                                 infoHoverLabel("Price Change (%)",
+                                 infoHoverLabel("Price Inflation Rate (%)",
                                                 "Annual percentage change in output peach prices."),
                                  value=0,
                                  min=-20,
                                  max=20),
                     sliderInput("percent_cost_change",
-                                 infoHoverLabel("Cost Change (%)",
-                                                "Annual percentage change in costs after the first year."),
+                                 infoHoverLabel("Cost Inflation Rate (%)",
+                                                "Annual percentage change in costs."),
                                  value=0,
                                  min=-20,
                                  max=20),
@@ -151,12 +160,12 @@ ui <- tabsetPanel(
                  tags$div(
                    id="disease_menu",
                    numericInput("inf_intro",
-                                infoHoverLabel("Initial Number of Trees Infected", "Initial number of trees infected at `Year Disease Starts`."),
+                                infoHoverLabel("Initial Number of Trees Per Acre Infected (Out of 576 Trees/Acre)", "Initial number of trees infected at `Year Disease Starts`. This number will be out of 576 trees in an acre."),
                                 min=0,
-                                max=100,
+                                max=576,
                                 value=10),
                    sliderInput("disease_random_share_of_spread",
-                               infoHoverLabel("Percent of Disease Spread Randomly", "Percent of the disease that is spread randomly. If this is zero, infected trees only inpact their neighbors. Otherwise, the disease spreads randomly by the amount specified, and the rest of the amount directly from trees' neighbors."),
+                               infoHoverLabel("Percent of Disease Spread Entirely Between Trees Vs. Randomly", "Percent of the disease that is spread randomly. If this is zero, infected trees only impact their neighbors. Otherwise, the disease spreads randomly by the amount specified, and the rest of the amount directly from trees' neighbors."),
                                min=0,
                                max=100,
                                value=0),
@@ -227,8 +236,8 @@ ui <- tabsetPanel(
                   tags$div(
                     id="tree_replant_inputs",
                     numericInput("replant_cost_tree",
-                                 infoHoverLabel("Tree Replanting Cost"),
-                                 20),
+                                 infoHoverLabel("Tree Replanting Cost", "Cost to replant tree, including removal"),
+                                 45),
                     
                     radioButtons("replant_tree_block_size",
                                  infoHoverLabel("Number of additional surrounding trees to replant",
@@ -244,7 +253,7 @@ ui <- tabsetPanel(
                       id="tree_remove_inputs",
                       numericInput("remove_cost_tree",
                                    infoHoverLabel("Tree Removal Cost"),
-                                   10)
+                                   30)
                       ),
                   actionButton("replanting_menu_hide", "Close menu"),
                 )
@@ -275,10 +284,9 @@ ui <- tabsetPanel(
                                            "Year Treatment 1 and Treatment 2 start being applied. Consider changing the options in `Treatment Settings` to understand their impact."),
                             min=2022, 
                             max=2062,
-                            value=2022)
+                            value=2022),
+                actionButton("run_simulation", "Run Simulation", class="btn-primary btn-md")
                 ),
-    
-            # Show a plot of the generated distribution
             column(8,
                 fluidRow(
                   column(1, offset=10,
@@ -298,7 +306,9 @@ ui <- tabsetPanel(
                 plotlyOutput("orchard_health", height="350px"),
                 fluidRow(
                   column(6,plotlyOutput("tree_health")),
-                  column(6,DT::dataTableOutput("mytable"))),
+                  column(6,
+                         htmlOutput("table_label"),
+                         DT::dataTableOutput("mytable"))),
                 
                 )
              )

@@ -3,6 +3,7 @@ library(plotly)
 library(promises)
 library(scales)
 library(shiny)
+library(shinyjs)
 library(shinyjqui)
 library(tidyverse)
 
@@ -19,12 +20,20 @@ shinyServer(function(input, output, session) {
   updateTotalAnnualCost <- function(input_name){
     observeEvent(input[[input_name]], {
       updateTextInput("annual_cost", 
-                      value=input$annual_cost_1+input$annual_cost_2, 
+                      value=
+                        input$annual_cost_1 +
+                        input$annual_cost_2 +
+                        input$annual_cost_3 +
+                        input$annual_cost_4 +
+                        input$annual_cost_5,
                       session=session)
     })
   }
   updateTotalAnnualCost('annual_cost_1')
   updateTotalAnnualCost('annual_cost_2')
+  updateTotalAnnualCost('annual_cost_3')
+  updateTotalAnnualCost('annual_cost_4')
+  updateTotalAnnualCost('annual_cost_5')
   
   hide_ui <- function(ui, ...){jqui_hide(ui=ui, effect="blind", ...)}
   show_ui <- function(ui, ...){jqui_show(ui=ui, effect="blind", ...)}
@@ -208,26 +217,26 @@ shinyServer(function(input, output, session) {
   vals = reactiveValues(x=NULL, y=NULL, selectedYield=NULL)
   draw = reactiveVal(FALSE)
   
+  
+  # When press the update simulation button, the maximum amount for the orchard 
+  # is translated into the max amount for each tree.
   observeEvent(input$input_yield_update, {
-    print(vals$selectedYield)
-    print(vals$selectedYield/n_trees_in_orchard)
     input_yield_values(vals$selectedYield/rep(n_trees_in_orchard, length(vals$selectedYield)))
   })
   
-  observeEvent(input$input_yield_click, {
-    draw(!draw())
-    vals$x <- append(vals$x, NA)
-    vals$y <- append(vals$y, NA)
+  # 
+  observeEvent(input$input_yield_reset, handlerExpr = {
+    vals$x <- NULL; vals$y <- NULL; vals$selectedYield <- NULL;
   })
+  
+  
+  onevent("mousedown", "input_yield_plot", {draw(T)})
+  onevent("mouseup",   "input_yield_plot", {draw(F)})
+  onevent("mouseexit", "input_yield_plot", {draw(F)})
   
   observeEvent(input$draw, {
-    draw(input$draw)
     vals$x <- append(vals$x, NA)
     vals$y <- append(vals$y, NA)
-  })
-  
-  observeEvent(input$input_yield_reset, handlerExpr = {
-    vals$x <- NULL; vals$y <- NULL; input_yield_values(NULL);
   })
   
   observeEvent(input$input_yield_hover, {
@@ -238,32 +247,20 @@ shinyServer(function(input, output, session) {
   })
   
   output$input_yield_plot=renderPlot({
-    plot(x=vals$x, y=vals$y, xlim=c(rv$start_year, rv$end_year), ylim=c(0, 15000), ylab="Yield (lbs/ac)", xlab="Year", type="l", lwd=3)
-    if(length(vals$x)>1){
+    
+    if(length(vals$x)<=1){
+      x_axis <- (rv$start_year -2):(rv$end_year +2)
+      plot(x=x_axis, y=rep(input$max_yield, length(x_axis)), col="gray80", xlim=c(rv$start_year, rv$end_year), ylim=c(0, 15000), ylab="Yield (lbs/ac)", xlab="Year", type="l", lwd=3)
+      text(rv$end_year, input$max_yield, adj=c(1, -0.25),col="gray65",  "Current Maximum Yield")
+    } else {
+      plot(x=vals$x, y=vals$y, xlim=c(rv$start_year, rv$end_year), ylim=c(0, 15000), ylab="Yield (lbs/ac)", xlab="Year", type="l", lwd=3)
       years_to_simulate <- rv$start_year:rv$end_year
-      n_years <- length(years_to_simulate)
-      indices <- sapply(years_to_simulate, function(i){which.max((floor(vals$x)==i))}) 
-      selected_yield <- vals$y[indices]
-      # If drawing speed is too fast, some years will not have associated points
-      # This code interpolates between values to get the average yield
-      for (i in which(indices==2)) {
-        following_indices <- indices[i:n_years]
-        next_y_index <- following_indices[following_indices>2][1]
-        previous_indices <- indices[1:(i-1)]
-        prev_y_index <- tail(previous_indices[previous_indices>2], 1)
-        interpolated_y_val <- coalesce(
-          mean(c(vals$y[prev_y_index], vals$y[next_y_index]), na.rm=TRUE),
-          input$max_yield
-        )
-        if (length(interpolated_y_val)>0){
-          if(!is.na(interpolated_y_val)){
-            selected_yield[i] <- interpolated_y_val
-          }
-        }
-        
-      }
-      vals$selectedYield <- selected_yield
-      points(x=years_to_simulate, y=selected_yield, pch=19)
+      drawn_dfm <- data.frame(x=vals$x, y=vals$y) %>% mutate(x=round(x)) %>% group_by(x) %>% summarize(y=mean(y))
+      interpolated_dfm <- data.frame(x=years_to_simulate) %>%
+        left_join(drawn_dfm, by="x") %>% 
+        mutate(y=approx(x, y, x, rule=2)$y)
+      vals$selectedYield <- interpolated_dfm$y
+      points(x=interpolated_dfm$x, y=interpolated_dfm$y, pch=19)
     }
   })
   
@@ -286,13 +283,14 @@ shinyServer(function(input, output, session) {
   }
   
   tree_health_data <- reactive({
-    isolate(input_yield_values())
+    input$run_simulation
+    input$input_yield_update
     if(is.null(input_yield_values())){
-      per_year_per_tree_max_yield <- rep(input$max_yield/n_trees_in_orchard, rv$end_year - rv$start_year + 1)
+      per_year_per_tree_max_yield <- isolate(rep(input$max_yield/n_trees_in_orchard, rv$end_year - rv$start_year + 1))
     } else {
-      per_year_per_tree_max_yield <- input_yield_values()
+      per_year_per_tree_max_yield <- isolate(input_yield_values())
     }
-    simulation_inputs <- list(
+    simulation_inputs <- isolate(list(
       year_start = rv$start_year,
       year_end = rv$end_year + 1,
       t_disease_year = t_disease_year(),
@@ -317,7 +315,7 @@ shinyServer(function(input, output, session) {
       t2_cost = input$t2_cost,
       input_annual_price_change=input$percent_cost_change/100,
       output_annual_price_change=input$percent_price_change/100
-    )
+    ))
     simulation_results <- do.call(simulateControlScenarios, simulation_inputs)
     run_id <- rlang::hash(simulation_inputs)
     ## Setup logging for simulation settings_changes
@@ -508,7 +506,7 @@ shinyServer(function(input, output, session) {
           filter((time > (rv$start_year + TREE_FIRST_FULL_YIELD_YEAR)) & (time < (rv$start_year + get_planting_years()[1]))) %>%
           # orders descending order so that the function cumsum sums starting from the end of the life of the orchard
           arrange(desc(time)) %>%
-          mutate(across(ends_with("net_returns"), ~ifelse(n() >= 6, coalesce(sum_roll_6(.), cumsum(.)), NA), .names = "{.col}_cum")) %>%
+          mutate(across(ends_with("net_returns"), ~coalesce(sum_roll_6(.), cumsum(.)), .names = "{.col}_cum")) %>%
           # chooses the first time the expected profit from the net returns is outweighed by the replanted yield
           # The plus one is to ensure that the year matches the year replanted (indexing problem)
           summarise(`Disease Free`= first(time[max_net_returns_cum >= first_six_years_max_net_returns]) + 1,
@@ -554,6 +552,7 @@ shinyServer(function(input, output, session) {
         rownames_to_column("Economic Outcome") %>% # preparation for the transpose
         t() %>% data.frame() %>% rownames_to_column() 
       names(formatted_output_data) <- c("Economic Outcome", "Disease Free", "No Treatment", "Treatment 1", "Treatment 2")
+
       
       DT::datatable(formatted_output_data[-1, ], # Gets rid of the now redundant row names
                     options = list(dom = 't',
@@ -565,6 +564,15 @@ shinyServer(function(input, output, session) {
                     selection = 'single')
     })
     
+    
+    ### Prevents table label from rendering before data has returned. 
+    output$table_label <- renderUI({
+      datatable_label <- HTML("")
+      if(!is.na(tree_health_data()$id)){
+        datatable_label <- HTML(" <h4><b>Economic Outcomes:</b>  <em>Click table rows to plot</em></h4>")
+      } 
+      datatable_label
+    })
     
 
   
