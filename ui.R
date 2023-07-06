@@ -1,7 +1,7 @@
 library(DT)
 library(plotly)
 library(shiny)
-library(shinyjs,       include.only = 'useShinyjs')
+library(shinyjs)
 library(shinyWidgets)
 
 infoHoverLabel<- function(label, info_text=NA, link=NA){

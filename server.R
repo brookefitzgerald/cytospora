@@ -217,14 +217,16 @@ shinyServer(function(input, output, session) {
   vals = reactiveValues(x=NULL, y=NULL, selectedYield=NULL)
   draw = reactiveVal(FALSE)
   
+  
+  # When press the update simulation button, the maximum amount for the orchard 
+  # is translated into the max amount for each tree.
   observeEvent(input$input_yield_update, {
-    print(vals$selectedYield)
-    print(vals$selectedYield/n_trees_in_orchard)
     input_yield_values(vals$selectedYield/rep(n_trees_in_orchard, length(vals$selectedYield)))
   })
   
+  # 
   observeEvent(input$input_yield_reset, handlerExpr = {
-    vals$x <- NULL; vals$y <- NULL; input_yield_values(NULL);
+    vals$x <- NULL; vals$y <- NULL; vals$selectedYield <- NULL;
   })
   
   
@@ -233,7 +235,6 @@ shinyServer(function(input, output, session) {
   onevent("mouseexit", "input_yield_plot", {draw(F)})
   
   observeEvent(input$draw, {
-    draw(input$draw)
     vals$x <- append(vals$x, NA)
     vals$y <- append(vals$y, NA)
   })
@@ -246,14 +247,19 @@ shinyServer(function(input, output, session) {
   })
   
   output$input_yield_plot=renderPlot({
-    plot(x=vals$x, y=vals$y, xlim=c(rv$start_year, rv$end_year), ylim=c(0, 15000), ylab="Yield (lbs/ac)", xlab="Year", type="l", lwd=3)
-    if(length(vals$x)>1){
+    
+    if(length(vals$x)<=1){
+      x_axis <- (rv$start_year -2):(rv$end_year +2)
+      plot(x=x_axis, y=rep(input$max_yield, length(x_axis)), col="gray80", xlim=c(rv$start_year, rv$end_year), ylim=c(0, 15000), ylab="Yield (lbs/ac)", xlab="Year", type="l", lwd=3)
+      text(rv$end_year, input$max_yield, adj=c(1, -0.25),col="gray65",  "Current Maximum Yield")
+    } else {
+      plot(x=vals$x, y=vals$y, xlim=c(rv$start_year, rv$end_year), ylim=c(0, 15000), ylab="Yield (lbs/ac)", xlab="Year", type="l", lwd=3)
       years_to_simulate <- rv$start_year:rv$end_year
-      
       drawn_dfm <- data.frame(x=vals$x, y=vals$y) %>% mutate(x=round(x)) %>% group_by(x) %>% summarize(y=mean(y))
       interpolated_dfm <- data.frame(x=years_to_simulate) %>%
         left_join(drawn_dfm, by="x") %>% 
         mutate(y=approx(x, y, x, rule=2)$y)
+      vals$selectedYield <- interpolated_dfm$y
       points(x=interpolated_dfm$x, y=interpolated_dfm$y, pch=19)
     }
   })
@@ -278,7 +284,7 @@ shinyServer(function(input, output, session) {
   
   tree_health_data <- reactive({
     input$run_simulation
-    
+    input$input_yield_update
     if(is.null(input_yield_values())){
       per_year_per_tree_max_yield <- isolate(rep(input$max_yield/n_trees_in_orchard, rv$end_year - rv$start_year + 1))
     } else {
