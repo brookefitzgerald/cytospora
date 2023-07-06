@@ -277,13 +277,14 @@ shinyServer(function(input, output, session) {
   }
   
   tree_health_data <- reactive({
-    isolate(input_yield_values())
+    input$run_simulation
+    
     if(is.null(input_yield_values())){
-      per_year_per_tree_max_yield <- rep(input$max_yield/n_trees_in_orchard, rv$end_year - rv$start_year + 1)
+      per_year_per_tree_max_yield <- isolate(rep(input$max_yield/n_trees_in_orchard, rv$end_year - rv$start_year + 1))
     } else {
-      per_year_per_tree_max_yield <- input_yield_values()
+      per_year_per_tree_max_yield <- isolate(input_yield_values())
     }
-    simulation_inputs <- list(
+    simulation_inputs <- isolate(list(
       year_start = rv$start_year,
       year_end = rv$end_year + 1,
       t_disease_year = t_disease_year(),
@@ -308,7 +309,7 @@ shinyServer(function(input, output, session) {
       t2_cost = input$t2_cost,
       input_annual_price_change=input$percent_cost_change/100,
       output_annual_price_change=input$percent_price_change/100
-    )
+    ))
     simulation_results <- do.call(simulateControlScenarios, simulation_inputs)
     run_id <- rlang::hash(simulation_inputs)
     ## Setup logging for simulation settings_changes

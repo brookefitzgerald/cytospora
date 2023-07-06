@@ -284,10 +284,9 @@ ui <- tabsetPanel(
                                            "Year Treatment 1 and Treatment 2 start being applied. Consider changing the options in `Treatment Settings` to understand their impact."),
                             min=2022, 
                             max=2062,
-                            value=2022)
+                            value=2022),
+                actionButton("run_simulation", "Run Simulation", class="btn-primary btn-md")
                 ),
-    
-            # Show a plot of the generated distribution
             column(8,
                 fluidRow(
                   column(1, offset=10,
