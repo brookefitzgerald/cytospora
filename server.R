@@ -545,6 +545,7 @@ shinyServer(function(input, output, session) {
         rownames_to_column("Economic Outcome") %>% # preparation for the transpose
         t() %>% data.frame() %>% rownames_to_column() 
       names(formatted_output_data) <- c("Economic Outcome", "Disease Free", "No Treatment", "Treatment 1", "Treatment 2")
+
       
       DT::datatable(formatted_output_data[-1, ], # Gets rid of the now redundant row names
                     options = list(dom = 't',
@@ -556,6 +557,15 @@ shinyServer(function(input, output, session) {
                     selection = 'single')
     })
     
+    
+    ### Prevents table label from rendering before data has returned. 
+    output$table_label <- renderUI({
+      datatable_label <- HTML("")
+      if(!is.na(tree_health_data()$id)){
+        datatable_label <- HTML(" <h4><b>Economic Outcomes:</b>  <em>Click table rows to plot</em></h4>")
+      } 
+      datatable_label
+    })
     
 
   
