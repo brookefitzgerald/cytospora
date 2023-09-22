@@ -568,6 +568,75 @@ shinyServer(function(input, output, session) {
       datatable_label
     })
     
-
+    ######### Compare simulation outcomes ###########
+    
+    output$simulation_outome_plot <- renderPlot({
+      if(is.null(input_yield_values())){
+        per_year_per_tree_max_yield <- isolate(rep(input$max_yield/n_trees_in_orchard, rv$end_year - rv$start_year + 1))
+      } else {
+        per_year_per_tree_max_yield <- isolate(input_yield_values())
+      }
+      unchanging_settings <<- isolate(list(
+        year_start = rv$start_year,
+        year_end = rv$end_year + 1,
+        t_disease_year = t_disease_year(),
+        t_treatment_year = t_treatment_year(),
+        
+        max_yield = per_year_per_tree_max_yield,
+        remove_cost_tree = input$remove_cost_tree,
+        replant_cost_tree = input$replant_cost_tree,
+        replant_cost_orchard = input$replant_cost_orchard,
+        remove_tree_block_size=0, # TODO: decide if this should also be removed in blocks
+        
+        output_price = output_price(),
+        annual_cost = input$annual_cost,
+        
+        ### will remove
+        disease_spread_rate = input$disease_spread_rate/100,
+        inf_intro = input$inf_intro,
+        t1_cost = input$t1_cost,
+        t2_cost = input$t2_cost
+      ))
+      
+      changing_settings <<- isolate(list(
+        disease_random_share_of_spread = input$disease_random_share_of_spread/100, # function expects a percentage (fraction)
+        disease_growth_rate = input$disease_growth_rate/100,
+        control1 = input$control1/100,
+        control2 = input$control2/100,
+        input_annual_price_change = input$percent_cost_change/100,
+        output_annual_price_change = input$percent_price_change/100
+      ))
+      
+      #control_settings <- isolate(list(
+      #  replanting_strategy = input$replanting_strategy,
+      #  replant_years = get_planting_years(),
+      #  replant_tree_block_size=as.numeric(input$replant_tree_block_size)
+      #))
+      
+      control_settings <<- list(list(
+          replanting_strategy = "tree_replant",
+          replant_tree_block_size = 2
+        ), list(
+          replanting_strategy = "orchard_replant",
+          get_planting_years(n_replant_years = 20)
+        ), list(
+          replanting_strategy = "orchard_replant",
+          get_planting_years(n_replant_years = 15)
+        )
+      )
+      
+      ### generate multiple simulations
+      
+      outcome_target <- "Average Yearly Net Returns" # TODO: replace with input$simulation_outcome
+      results_dfm <- generateManySimulations(outcome_target, unchanging_settings, changing_settings, control_settings)
+      
+      ### calculate the distribution of simulation outcomes
+      ggplot(results_dfm %>% pivot_longer(ends_with("net_returns"), values_to="avg_net_returns", names_pattern = "(..)_net_returns", names_to="Treatment"),
+             aes(x=avg_net_returns, fill=Treatment)) + 
+        geom_histogram(position="dodge") + 
+        scale_x_continuous(labels=label_dollar()) +
+        facet_wrap(~as.factor(simulation_control_scenario)) +
+        theme_minimal()
+    })
   
 })

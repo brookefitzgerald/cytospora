@@ -263,6 +263,55 @@ simulateControlScenarios <- function(year_start,
     rename(`Disease Free`=max_yield,`No Treatment`=nt_yield,`Treatment 1`=t1_yield,`Treatment 2`=t2_yield)
 }
 
+generate_setting_change_sets <- function(changing_settings, n_control_settings){
+  require(data.table, include.only="CJ")
+  percent_changes <- c(-0.1, -0.05, 0, 0.05, 0.1)
+  changed_settings <- lapply(changing_settings, function(y){y + percent_changes})
+  changed_settings$disease_random_share_of_spread <- unique(pmax(changed_settings$disease_random_share_of_spread, 0.0))
+  changed_settings$disease_growth_rate            <- unique(pmax(changed_settings$disease_growth_rate, 0.0))
+  changed_settings$control1                       <- unique(pmax(changed_settings$control1, 0.0))
+  changed_settings$control2                       <- unique(pmax(changed_settings$control2, 0.0))
+  changed_settings$control_setting_id <- 1:n_control_settings
+  do.call(CJ, changed_settings)
+}
+
+generateManySimulations <- function(simulation_outcome, unchanging_settings, changing_settings, control_settings){
+  n_control_settings <- length(control_settings)
+  setting_change_sets <- generate_setting_change_sets(changing_settings, n_control_settings)
+  max_yield <- unchanging_settings$max_yield
+  unchanging_settings$max_yield <- NULL
+  results_dfm <- data.frame()
+  
+  sample_set_indices <- sample.int(n=2000)
+  
+  for (i in sample_set_indices){
+    setting_set <- setting_change_sets[i, ]
+    control_setting <- control_settings[setting_set$control_setting_id]
+    
+    full_settings <- flatten(c(setting_set, control_setting, unchanging_settings))
+    full_settings$max_yield <- 15 #max_yield
+    full_settings$control_setting_id <- NULL
+    
+    simulation_results <- tryCatch(
+      do.call(simulateControlScenarios, full_settings) %>%
+        select(t1_net_returns, t2_net_returns, x, y, time) %>%
+        group_by(time) %>%
+        summarize(across(c(t1_net_returns, t2_net_returns),~sum(.,na.rm = T))) %>%
+        ungroup() %>%
+        summarize(across(-c(time),~mean(.,na.rm = T))) %>% 
+        mutate(simulation_control_scenario=setting_set$control_setting_id),
+      error=function(e){NULL},
+      NULL)
+    if(!is.null(simulation_results)){
+      results_dfm <- rbind(results_dfm, cbind(simulation_results, full_settings))  
+    }
+    
+  }
+  results_dfm
+}
+
+
+
 ############## Plotting Functions #####################
 
 plot_line_at_current_year <- function(currentyear) {
