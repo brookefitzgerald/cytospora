@@ -9,10 +9,10 @@ get_indices <- function(i, k, n){
   return(max(1, i-k):min(n, i+k))
 }
 
-grow_tree_function <- function(tree_ages,                                      #Matrix or vector of tree ages
-                       max_yield,                                              #Yield at maturity
-                       tree_first_full_yield_year=TREE_FIRST_FULL_YIELD_YEAR,  #Year tree reaches maturity
-                       tree_end_year=40){                                      #Productive life of tree
+grow_tree_function <- function(tree_ages,                                              #Matrix or vector of tree ages
+                               max_yield,                                              #Yield at maturity
+                               tree_first_full_yield_year=TREE_FIRST_FULL_YIELD_YEAR,  #Year tree reaches maturity
+                               tree_end_year=40){                                      #Productive life of tree
   
   #Growth function - trees mature at `tree_first_full_yield_year`, 
   #                        survive until `tree_end_year`

@@ -140,16 +140,17 @@ shinyServer(function(input, output, session) {
     start_year = NULL,
     end_year = NULL
   )
-  get_n_cycles_possible <- function() {
-    n_cycles <- floor((rv$end_year - rv$start_year)/input$replant_cycle_year_orchard)
+  get_n_cycles_possible <- function(n_replant_years=NULL) {
+    n_replant_years <- ifelse(is.null(n_replant_years), input$replant_cycle_year_orchard, n_replant_years)
+    n_cycles <- floor((rv$end_year - rv$start_year)/n_replant_years)
     ifelse(n_cycles==0, 1, n_cycles)
   }
-  get_planting_years <- (function(with_added_start_year=FALSE){
+  get_planting_years <- (function(with_added_start_year=FALSE, n_replant_years=NULL){
     # If not replanting on a cycle, only return the first year
     if (input$replanting_strategy %in% c('no_replant', 'tree_replant', 'tree_remove')) {
       planting_years <- c(rv$end_year - rv$start_year)
     } else {
-      n_cycles_possible <- get_n_cycles_possible()
+      n_cycles_possible <- get_n_cycles_possible(n_replant_years)
       years_replanted <- (1:n_cycles_possible)*input$replant_cycle_year_orchard
       to_add <- ifelse(with_added_start_year, rv$start_year, 0)
       planting_years <- years_replanted + to_add
@@ -176,14 +177,8 @@ shinyServer(function(input, output, session) {
     # Update the maximum value of the replant cycle orchard to be the updated time_horizon
     updateSliderInput("replant_cycle_year_orchard", max=end_yr - start_yr, session=session)
     rv$prev_th <- input$time_horizon
-    
-    # Removes commas in the year sliders
-    session$sendCustomMessage("updateSliders", '')
     })
-  # Remove commas in the year sliders when any of these years are changed
-  observeEvent(input$year, session$sendCustomMessage("updateSliders", ''))
-  observeEvent(input$start_disease_year, session$sendCustomMessage("updateSliders", ''))
-  observeEvent(input$start_treatment_year, session$sendCustomMessage("updateSliders", ''))
+  
   
   # Render number of cycles conditional on cycle length and number of years in simulation
   
@@ -416,7 +411,6 @@ shinyServer(function(input, output, session) {
           end_hover_time(NULL)
         }
       }
-      session$sendCustomMessage("updateSliders", 'test') # this line updates the year sliders regularly
     })
     
     output$tree_health <- renderPlotly({
