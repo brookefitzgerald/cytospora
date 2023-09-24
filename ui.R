@@ -255,8 +255,6 @@ simulation_time_settings <- tags$div(
 
 main_dashboard_panel <- tags$div(
       id="div_dashboard",
-      
-      
       fluidPage(
         tags$head(tags$link(rel = "shortcut icon", href = "favicon.ico")),
         tags$head(tags$style(HTML("table {table-layout: fixed;}"))),
@@ -336,7 +334,7 @@ compare_simulations_panel <- fluidPage(
     )
 ) 
 
-tutorial_panel <- tags$div("Work in Progress")
+tutorial_panel <- img(id="coming_soon", src="images/coming_soon.png", class="center", height="500px")
 
 ui <- tabsetPanel(
     id = "panels",
