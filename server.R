@@ -54,16 +54,6 @@ shinyServer(function(input, output, session) {
       show_ui("#div_dashboard", duration=0)
   })
   
-  output$logo <- renderImage(
-    expr=list(
-      class= "center",
-      src = "www/images/logo.png",
-      contentType = "image/png",
-      alt = "CSU Logo",
-      height = "100%"),
-    deleteFile=FALSE,
-  )
-  
   ##### Dynamically rendering the simulation options ########
   
   # Initially untoggle panel elements
