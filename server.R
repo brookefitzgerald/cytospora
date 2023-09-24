@@ -40,6 +40,7 @@ shinyServer(function(input, output, session) {
   
   # Hide dashboard by default
   hide_ui("#div_dashboard")
+  hide_ui("#loading_spinner")
   
   observeEvent(input$go_to_app, {
     # if user has clicked away from landing page:
@@ -560,7 +561,39 @@ shinyServer(function(input, output, session) {
     
     ######### Compare simulation outcomes ###########
     
-    output$simulation_outome_plot <- renderPlot({
+    simulation_output_plot <- reactiveVal(NULL)
+    observe({
+      if(!is.null(simulation_output_plot())){
+        if(simulation_output_plot()=="started_simulations"){
+          future_promise(
+            ### calculate the distribution of simulation outcomes
+            generateManySimulations(
+              outcome_target, unchanging_settings, changing_settings, control_settings
+            )) %>% then(
+              onFulfilled=function(results_dfm) {
+                ## The data has ran now so we can remove the spinner!
+                hide_ui("#loading_spinner")
+                # plots a histogram of the completed outcomes
+                plot <- results_dfm %>%
+                  pivot_longer(
+                    ends_with("net_returns"),
+                    values_to="avg_net_returns", 
+                    names_pattern = "(..)_net_returns", 
+                    names_to="Treatment") %>%
+                  ggplot(aes(x=avg_net_returns, fill=Treatment)) + 
+                  geom_histogram(position="dodge") + 
+                  scale_x_continuous(labels=label_dollar()) +
+                  facet_wrap(~as.factor(simulation_control_scenario)) +
+                  theme_minimal()
+                output$simulation_outcome_plot <- renderPlot({plot})
+                simulation_output_plot(NULL)
+              })
+        }
+      }
+    })
+    
+    
+    observeEvent(input$simulation_outcome, {
       if(is.null(input_yield_values())){
         per_year_per_tree_max_yield <- isolate(rep(input$max_yield/n_trees_in_orchard, rv$end_year - rv$start_year + 1))
       } else {
@@ -597,6 +630,10 @@ shinyServer(function(input, output, session) {
         output_annual_price_change = input$percent_price_change/100
       ))
       
+      
+      ### I'm thinking about adding these as other control strategies, 
+      ### but it's difficult because it exponentiates the processing time
+      
       #control_settings <- isolate(list(
       #  replanting_strategy = input$replanting_strategy,
       #  replant_years = get_planting_years(),
@@ -604,29 +641,25 @@ shinyServer(function(input, output, session) {
       #))
       
       control_settings <<- list(list(
-          replanting_strategy = "tree_replant",
-          replant_tree_block_size = 2
-        ), list(
-          replanting_strategy = "orchard_replant",
-          get_planting_years(n_replant_years = 20)
-        ), list(
-          replanting_strategy = "orchard_replant",
-          get_planting_years(n_replant_years = 15)
-        )
+        replanting_strategy = "tree_replant",
+        replant_tree_block_size = 2
+      ), list(
+        replanting_strategy = "orchard_replant",
+        get_planting_years(n_replant_years = 20)
+      ), list(
+        replanting_strategy = "orchard_replant",
+        get_planting_years(n_replant_years = 15)
+      )
       )
       
       ### generate multiple simulations
       
-      outcome_target <- "Average Yearly Net Returns" # TODO: replace with input$simulation_outcome
-      results_dfm <- generateManySimulations(outcome_target, unchanging_settings, changing_settings, control_settings)
-      
-      ### calculate the distribution of simulation outcomes
-      ggplot(results_dfm %>% pivot_longer(ends_with("net_returns"), values_to="avg_net_returns", names_pattern = "(..)_net_returns", names_to="Treatment"),
-             aes(x=avg_net_returns, fill=Treatment)) + 
-        geom_histogram(position="dodge") + 
-        scale_x_continuous(labels=label_dollar()) +
-        facet_wrap(~as.factor(simulation_control_scenario)) +
-        theme_minimal()
+      outcome_target <- input$simulation_outcome
+      if (outcome_target!=""){
+        show_ui("#loading_spinner")
+        output$simulation_outcome_plot <- renderPlot({})
+        delay(1000, simulation_output_plot("started_simulations"))
+      }
     })
   
 })

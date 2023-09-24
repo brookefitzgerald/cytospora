@@ -262,7 +262,6 @@ main_dashboard_panel <- tags$div(
         tags$head(tags$style(HTML("table {table-layout: fixed;}"))),
         tags$head(tags$style(".datatables .display {margin-left: 0;}")),
         tags$head(includeHTML("www/google-analytics.html")),
-        tags$script(src="js/update_slider_labels.js"),
         tags$script(src="js/draw_input_data.js"),
         useShinyjs(),
         # Application title
@@ -332,7 +331,8 @@ compare_simulations_panel <- fluidPage(
         )))
     ),
     fluidRow(
-      plotOutput("simulation_outome_plot", height="350px"),
+      img(id="loading_spinner", src="images/loading_spinner_200px.gif", class="center"),
+      plotOutput("simulation_outcome_plot", height="350px"),
     )
 ) 
 
