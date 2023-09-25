@@ -338,8 +338,6 @@ compare_simulations_panel <- fluidPage(
           fluidRow(
             column(6,sliderInput("min_max_slider", "range", value=c(0.1, 0.5), min=0, max=1)),
             tags$script(src="js/connectSliders.js"),
-            column(6, sliderInputWithShadow("slidertest2", "Midpoint", min=0, max=1, value=0.4, from_min = 0.1, from_max=0.5))
-            
             ),
           )
       )
