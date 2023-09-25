@@ -21,7 +21,7 @@ menuIconLabel <- function(label, id_prefix){
           "</div>")
       )
     )
-  }
+}
 
 # Create UI for Landing page with CSU Branding
 landing_page_panel <-
@@ -322,7 +322,7 @@ compare_simulations_panel <- fluidPage(
       column(8, tags$h1("Compare Simulations By Outcome:")),
       column(4, selectizeInput(
         'simulation_outcome', '', 
-        choices = c("Average Yearly Net Returns", "Net Present Value", "Yield"),
+        choices = c("Average Yearly Net Returns", "Net Present Value"),
         options = list(
           placeholder = 'Please select a simulation outcome below',
           onInitialize = I('function() { this.setValue(""); }')
@@ -331,6 +331,18 @@ compare_simulations_panel <- fluidPage(
     fluidRow(
       img(id="loading_spinner", src="images/loading_spinner_200px.gif", class="center"),
       plotOutput("simulation_outcome_plot", height="350px"),
+      tags$div(
+        id="simulation_parameters", 
+        column(
+          6, 
+          fluidRow(
+            column(6,sliderInput("min_max_slider", "range", value=c(0.1, 0.5), min=0, max=1)),
+            tags$script(src="js/connectSliders.js"),
+            column(6, sliderInputWithShadow("slidertest2", "Midpoint", min=0, max=1, value=0.4, from_min = 0.1, from_max=0.5))
+            
+            ),
+          )
+      )
     )
 ) 
 

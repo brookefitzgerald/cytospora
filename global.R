@@ -300,7 +300,9 @@ generateManySimulations <- function(simulation_outcome, unchanging_settings, cha
         ungroup() %>%
         summarize(across(-c(time),~mean(.,na.rm = T))) %>% 
         mutate(simulation_control_scenario=setting_set$control_setting_id),
-      error=function(e){NULL},
+      error=function(e){
+        print(paste("error in index", e, i, "setting: ", changing_settings))
+        NULL},
       NULL)
     if(!is.null(simulation_results)){
       results_dfm <- rbind(results_dfm, cbind(simulation_results, full_settings))  

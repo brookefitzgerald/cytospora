@@ -53,6 +53,8 @@ shinyServer(function(input, output, session) {
       
       # then show it's contents:
       show_ui("#div_dashboard", duration=0)
+      
+      delay(1500, session$sendCustomMessage("addExtraDotLabel", "min_max_slider"));
   })
   
   ##### Dynamically rendering the simulation options ########
@@ -250,7 +252,11 @@ shinyServer(function(input, output, session) {
     }
   })
   
-  
+  ## information for the triangle distributions
+  observeEvent(input$min_max_slider, {
+    session$sendCustomMessage("updateSliderBoundsForExtraDot", "min_max_slider")
+  })
+
   ####### Run simulations #######
   # Note that the reactive context means that whenever the relevant inputs 
   # change, the value of the variable changes and any downstream functions that  
@@ -565,29 +571,33 @@ shinyServer(function(input, output, session) {
     observe({
       if(!is.null(simulation_output_plot())){
         if(simulation_output_plot()=="started_simulations"){
-          future_promise(
-            ### calculate the distribution of simulation outcomes
-            generateManySimulations(
-              outcome_target, unchanging_settings, changing_settings, control_settings
-            )) %>% then(
-              onFulfilled=function(results_dfm) {
-                ## The data has ran now so we can remove the spinner!
-                hide_ui("#loading_spinner")
-                # plots a histogram of the completed outcomes
-                plot <- results_dfm %>%
-                  pivot_longer(
-                    ends_with("net_returns"),
-                    values_to="avg_net_returns", 
-                    names_pattern = "(..)_net_returns", 
-                    names_to="Treatment") %>%
-                  ggplot(aes(x=avg_net_returns, fill=Treatment)) + 
-                  geom_histogram(position="dodge") + 
-                  scale_x_continuous(labels=label_dollar()) +
-                  facet_wrap(~as.factor(simulation_control_scenario)) +
-                  theme_minimal()
-                output$simulation_outcome_plot <- renderPlot({plot})
-                simulation_output_plot(NULL)
-              })
+          tryCatch(
+            future_promise(
+              ### calculate the distribution of simulation outcomes
+              generateManySimulations(
+                outcome_target, unchanging_settings, changing_settings, control_settings
+              )) %>% then(
+                onFulfilled=function(results_dfm) {
+                  ## The data has ran now so we can remove the spinner!
+                  hide_ui("#loading_spinner")
+                  # plots a histogram of the completed outcomes
+                  plot <- results_dfm %>%
+                    pivot_longer(
+                      ends_with("net_returns"),
+                      values_to="avg_net_returns", 
+                      names_pattern = "(..)_net_returns", 
+                      names_to="Treatment") %>%
+                    ggplot(aes(x=avg_net_returns, fill=Treatment)) + 
+                    geom_histogram(position="dodge") + 
+                    scale_x_continuous(labels=label_dollar()) +
+                    facet_wrap(~as.factor(simulation_control_scenario)) +
+                    theme_minimal()
+                  output$simulation_outcome_plot <- renderPlot({plot})
+                  simulation_output_plot(NULL)
+                }),
+            error=function(e){},
+            NULL
+          )
         }
       }
     })
