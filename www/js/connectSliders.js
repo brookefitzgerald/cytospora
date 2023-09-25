@@ -18,18 +18,20 @@ $(document).ready(function() {
   // Function to apply custom styles to the target slider
   function addExtraDotLabel(slider_id){
     
-    function startDragging(e, dot, label, minDot, maxDot, range=[0,1]) {
+    function startDragging(e, dot, minDot, maxDot, range=[0,1]) {
       isDragging = true;
+      const label = dot.nextSibling; 
       $(document).on("mousemove", onMouseMove);
       $(document).on("mouseup", stopDragging);
       
       function onMouseMove(e) {
         if (!isDragging) return;
-        const sliderRect = slider[0].getBoundingClientRect();
+        const sliderRect = dot.parentElement.getBoundingClientRect();
         // Calculate the new position of the circle
         let min = percentageToNumber(minDot.style.left);
         let max = percentageToNumber(maxDot.style.left);
-        let newX = ((e.clientX - dot.offsetWidth)/ sliderRect.width)*100;
+        let newX = ((e.clientX - dot.offsetWidth - sliderRect.x)/ sliderRect.width)*100;
+        
         newX = Math.min(Math.max(newX, min), max);
         // Update the circle's position
         dot.style.left = newX + "%";
@@ -43,12 +45,11 @@ $(document).ready(function() {
         $(document).off("mouseup", stopDragging);
       }
     }
-    
-    var slider = $("#"+ slider_id +"-label").next();
+    let slider = $("#"+ slider_id +"-label").next();
       
-    var rightDot = slider.find(".irs-handle.from")[0];
-    var leftDot = slider.find(".irs-handle.to")[0];
-    var middleDot = rightDot.cloneNode(true);
+    let rightDot = slider.find(".irs-handle.from")[0];
+    let leftDot = slider.find(".irs-handle.to")[0];
+    let middleDot = rightDot.cloneNode(true);
     middleDot.classList.add('mid');
     middleDot.style.background = "#428BCA";
     
@@ -61,21 +62,20 @@ $(document).ready(function() {
     middleLabel.style.left = avg_percent + "%";
     middleLabel.textContent = Math.round(avg_percent)/100;
     
+    // insert rightDot, middleDot, middleLabel
     rightDot.parentNode.insertBefore(middleDot, rightDot.nextSibling);
-    rightLabel.parentNode.insertBefore(middleLabel, rightLabel.nextSibling);
+    middleDot.parentNode.insertBefore(middleLabel, middleDot.nextSibling);
     
-    middleDot.addEventListener("mousedown", function(e){startDragging(e, middleDot, middleLabel, rightDot, leftDot)});
+    middleDot.addEventListener("mousedown", function(e){startDragging(e, middleDot, rightDot, leftDot)});
   }
   
   function updateSliderBoundsForExtraDot(slider_id) {
     // Retrieve the max and min values from the control slider
-    
-    console.log("inside this function");
     let slider = $("#"+ slider_id +"-label").next();
       
-    let rightDot  = slider.find(".irs-handle.from")[0];
-    let leftDot   = slider.find(".irs-handle.to")[0];
-    let middleDot = slider.find(".irs-handle.mid")[0];
+    let rightDot    = slider.find(".irs-handle.from")[0];
+    let leftDot     = slider.find(".irs-handle.to")[0];
+    let middleDot   = slider.find(".irs-handle.mid")[0];
     let middleLabel = slider.find(".irs-from.mid")[0];
     
     let middleL = percentageToNumber(middleDot.style.left);

@@ -53,8 +53,6 @@ shinyServer(function(input, output, session) {
       
       # then show it's contents:
       show_ui("#div_dashboard", duration=0)
-      
-      delay(1500, session$sendCustomMessage("addExtraDotLabel", "min_max_slider"));
   })
   
   ##### Dynamically rendering the simulation options ########
@@ -250,11 +248,6 @@ shinyServer(function(input, output, session) {
       vals$selectedYield <- interpolated_dfm$y
       points(x=interpolated_dfm$x, y=interpolated_dfm$y, pch=19)
     }
-  })
-  
-  ## information for the triangle distributions
-  observeEvent(input$min_max_slider, {
-    session$sendCustomMessage("updateSliderBoundsForExtraDot", "min_max_slider")
   })
 
   ####### Run simulations #######
@@ -566,6 +559,17 @@ shinyServer(function(input, output, session) {
     })
     
     ######### Compare simulation outcomes ###########
+    
+    ##### Set up the triangle distributions for the variables that are changing
+    create_triangle_distribution_slider <- function(slider_name){
+      delay(3000, session$sendCustomMessage("addExtraDotLabel", slider_name));
+      observeEvent(input[[slider_name]], {
+        session$sendCustomMessage("updateSliderBoundsForExtraDot", slider_name)
+      })
+    }
+    create_triangle_distribution_slider("min_max_slider")
+    create_triangle_distribution_slider("big_time_slider")
+    
     
     simulation_output_plot <- reactiveVal(NULL)
     observe({
