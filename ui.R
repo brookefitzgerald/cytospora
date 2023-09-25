@@ -338,7 +338,7 @@ compare_simulations_panel <- fluidPage(
           6, 
           fluidRow(
             column(6,sliderInput("min_max_slider", "range", value=c(0.1, 0.5), min=0, max=1)),
-            column(6,sliderInput("big_time_slider", "range", value=c(0.2, 0.5), min=0, max=1)),
+            column(6,sliderInput("big_time_slider", "range", value=c(1.2, 1.5), min=1, max=2)),
             ),
           )
       )

@@ -561,14 +561,14 @@ shinyServer(function(input, output, session) {
     ######### Compare simulation outcomes ###########
     
     ##### Set up the triangle distributions for the variables that are changing
-    create_triangle_distribution_slider <- function(slider_name){
-      delay(3000, session$sendCustomMessage("addExtraDotLabel", slider_name));
+    create_triangle_distribution_slider <- function(slider_name, slider_range=c(0,1)){
+      delay(3000, session$sendCustomMessage("addExtraDotLabel", c(slider_name, slider_range)));
       observeEvent(input[[slider_name]], {
-        session$sendCustomMessage("updateSliderBoundsForExtraDot", slider_name)
+        session$sendCustomMessage("updateSliderBoundsForExtraDot", c(slider_name, slider_range))
       })
     }
     create_triangle_distribution_slider("min_max_slider")
-    create_triangle_distribution_slider("big_time_slider")
+    create_triangle_distribution_slider("big_time_slider", slider_range=c(1, 2))
     
     
     simulation_output_plot <- reactiveVal(NULL)

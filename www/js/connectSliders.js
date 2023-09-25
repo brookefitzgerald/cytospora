@@ -16,9 +16,11 @@ $(document).ready(function() {
       }
     }
   // Function to apply custom styles to the target slider
-  function addExtraDotLabel(slider_id){
+  function addExtraDotLabel(slider_data){
+    const slider_id = slider_data[0];
+    const range = [parseFloat(slider_data[1]), parseFloat(slider_data[2])];
     
-    function startDragging(e, dot, minDot, maxDot, range=[0,1]) {
+    function startDragging(e, dot, minDot, maxDot) {
       isDragging = true;
       const label = dot.nextSibling; 
       $(document).on("mousemove", onMouseMove);
@@ -30,13 +32,17 @@ $(document).ready(function() {
         // Calculate the new position of the circle
         let min = percentageToNumber(minDot.style.left);
         let max = percentageToNumber(maxDot.style.left);
-        let newX = ((e.clientX - dot.offsetWidth - sliderRect.x)/ sliderRect.width)*100;
-        
+        let newX = ((e.clientX - dot.offsetWidth - sliderRect.x)/ (sliderRect.width))*100;
         newX = Math.min(Math.max(newX, min), max);
+        
         // Update the circle's position
         dot.style.left = newX + "%";
-        label.textContent = Math.round((range[1] - range[0])*newX)/100+ "";
         label.style.left = newX + 0.25 +  "%";
+        
+        // Update the circle's label (shoudl not include the width of the dot)
+        let newLabelX = newX *(sliderRect.width) / (sliderRect.width - dot.offsetWidth);
+        label.textContent = Math.round((range[1] - range[0])*newLabelX)/100+ range[0] + "";
+        
       }
   
       function stopDragging() {
@@ -46,22 +52,26 @@ $(document).ready(function() {
       }
     }
     let slider = $("#"+ slider_id +"-label").next();
-      
+    
     let rightDot = slider.find(".irs-handle.from")[0];
     let leftDot = slider.find(".irs-handle.to")[0];
+    
     let middleDot = rightDot.cloneNode(true);
     middleDot.classList.add('mid');
     middleDot.style.background = "#428BCA";
     
+    let sliderRect = rightDot.parentElement.getBoundingClientRect();
     let avg_percent = (percentageToNumber(leftDot.style.left) + percentageToNumber(rightDot.style.left))/2;
     middleDot.style.left = avg_percent + "%";
     
     let rightLabel =  slider.find(".irs-from")[0];
     middleLabel = rightLabel.cloneNode(true);
     middleLabel.classList.add('mid');
-    middleLabel.style.left = avg_percent + "%";
-    middleLabel.textContent = Math.round(avg_percent)/100;
     
+    middleLabel.style.left = avg_percent + "%";
+    let newLabelX = avg_percent*(sliderRect.width) / (sliderRect.width - rightDot.offsetWidth);
+    middleLabel.textContent = Math.round((range[1] - range[0])*newLabelX)/100+ range[0] + "";
+    console.log("text content on intialization: " + (Math.round((range[1] - range[0])*newLabelX)/100+ range[0]));
     // insert rightDot, middleDot, middleLabel
     rightDot.parentNode.insertBefore(middleDot, rightDot.nextSibling);
     middleDot.parentNode.insertBefore(middleLabel, middleDot.nextSibling);
@@ -69,7 +79,11 @@ $(document).ready(function() {
     middleDot.addEventListener("mousedown", function(e){startDragging(e, middleDot, rightDot, leftDot)});
   }
   
-  function updateSliderBoundsForExtraDot(slider_id) {
+  function updateSliderBoundsForExtraDot(slider_data) {
+    const slider_id = slider_data[0];
+    const range = [parseFloat(slider_data[1]), parseFloat(slider_data[2])];
+    console.log(slider_data);
+    
     // Retrieve the max and min values from the control slider
     let slider = $("#"+ slider_id +"-label").next();
       
@@ -78,12 +92,17 @@ $(document).ready(function() {
     let middleDot   = slider.find(".irs-handle.mid")[0];
     let middleLabel = slider.find(".irs-from.mid")[0];
     
+    let sliderRect = rightDot.parentElement.getBoundingClientRect();
+    console.log(middleDot);
     let middleL = percentageToNumber(middleDot.style.left);
     
     middleL = Math.max(percentageToNumber(rightDot.style.left), middleL);
     middleL = Math.min(percentageToNumber(leftDot.style.left), middleL);
     middleDot.style.left = middleL + "%";
     middleLabel.style.left = middleL + "%";
+    
+    let newLabelX = middleL*(sliderRect.width) / (sliderRect.width - middleDot.offsetWidth);
+    middleLabel.textContent = Math.round((range[1] - range[0])*newLabelX)/100+ range[0] + "";
   }
   
   // Listen for changes in the control slider values
