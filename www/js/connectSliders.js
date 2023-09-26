@@ -1,7 +1,7 @@
 $(document).ready(function() {
-  function percentageToNumber(percentageString) {
+  function stringToNumber(percentageString) {
       // Remove the "%" character from the string
-      var cleanedString = percentageString.replace('%', '');
+      var cleanedString = percentageString.replace('%', '').replace(',', '');
     
       // Parse the cleaned string as a float
       var number = parseFloat(cleanedString);
@@ -17,7 +17,7 @@ $(document).ready(function() {
     }
   function createMiddleDot(slider_data){
     const slider_id = slider_data[0];
-    const range = [parseFloat(slider_data[1]), parseFloat(slider_data[2])];
+    const range = [stringToNumber(slider_data[1]), stringToNumber(slider_data[2])];
     const start = slider_data[3];
     function startDragging(e, dot, minDot, maxDot) {
       isDragging = true;
@@ -29,8 +29,8 @@ $(document).ready(function() {
         if (!isDragging) return;
         const sliderRect = dot.parentElement.getBoundingClientRect();
         // Calculate the new position of the circle
-        let min = percentageToNumber(minDot.style.left);
-        let max = percentageToNumber(maxDot.style.left);
+        let min = stringToNumber(minDot.style.left);
+        let max = stringToNumber(maxDot.style.left);
         let newX = ((e.clientX - dot.offsetWidth - sliderRect.x)/ (sliderRect.width))*100;
         newX = Math.min(Math.max(newX, min), max);
         
@@ -52,6 +52,7 @@ $(document).ready(function() {
         $(document).off("mouseup", stopDragging);
       }
     }
+    //TODO: update when the right and left labels combine
     
     let slider = $("#"+ slider_id +"-label").next();
     
@@ -62,7 +63,7 @@ $(document).ready(function() {
     middleDot.classList.add('mid');
     middleDot.style.background = "#428BCA";
     
-    let avg_percent = (percentageToNumber(leftDot.style.left) + percentageToNumber(rightDot.style.left))/2;
+    let avg_percent = (stringToNumber(leftDot.style.left) + stringToNumber(rightDot.style.left))/2;
     middleDot.style.left = avg_percent + "%";
     
     let rightLabel =  slider.find(".irs-from")[0];
@@ -85,7 +86,7 @@ $(document).ready(function() {
   
   function updateSliderBoundsForExtraDot(slider_data) {
     const slider_id = slider_data[0];
-    const range = [parseFloat(slider_data[1]), parseFloat(slider_data[2])];
+    const range = [stringToNumber(slider_data[1]), stringToNumber(slider_data[2])];
 
     // Retrieve the max and min values from the control slider
     let slider = $("#"+ slider_id +"-label").next();
@@ -98,16 +99,16 @@ $(document).ready(function() {
     let sliderRect = rightDot.parentElement.getBoundingClientRect();
 
     if (typeof middleDot !== 'undefined') {
-      let middleL = percentageToNumber(middleDot.style.left);
-      middleL = Math.max(percentageToNumber(rightDot.style.left), middleL);
-      middleL = Math.min(percentageToNumber(leftDot.style.left), middleL);
+      let middleL = stringToNumber(middleDot.style.left);
+      middleL = Math.max(stringToNumber(rightDot.style.left), middleL);
+      middleL = Math.min(stringToNumber(leftDot.style.left), middleL);
       
       middleDot.style.left = middleL + "%";
       middleLabel.style.left = middleL + "%";
-      
       let newLabelX = middleL*(sliderRect.width) / (sliderRect.width - rightDot.offsetWidth);
       newLabelX = Math.round((range[1] - range[0])*newLabelX)/100+ range[0];
       middleLabel.textContent = newLabelX + "";
+      middleLabel.style.visibility = 'visible';
       Shiny.setInputValue(slider_id + "_avg", newLabelX);
     }
     

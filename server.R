@@ -566,25 +566,50 @@ shinyServer(function(input, output, session) {
     ######### Compare simulation outcomes ###########
     
     ##### Set up the triangle distributions for the variables that are changing
-    update_triangle_distribution_slider <- function(slider_name, slider_range=c(0,1)){
-      observeEvent(input[[slider_name]], {
-        session$sendCustomMessage("updateSliderBoundsForExtraDot", c(slider_name, slider_range))
-      })
+    
+    distribution_sliders <- list(
+      list(name="disease_random_share_of_spread_range"),
+      list(name="inf_intro_range", range=c(1,576)),
+      list(name="disease_growth_rate_range"),
+      list(name="treatment_1_effectiveness_range"),
+      list(name="treatment_2_effectiveness_range"),
+      list(name="annual_cost_range", range=c(0,20000))
+    )
+    update_all_distributions <- function(){
+      update_triangle_distribution_slider <- function(slider_data){
+        slider_name <- slider_data$name
+        slider_range <- slider_data$range
+        if (any(is.null(slider_range))){
+          slider_range <- c(0,1)
+        }
+        observeEvent(input[[slider_name]], {
+          session$sendCustomMessage("updateSliderBoundsForExtraDot", c(slider_name, slider_range))
+        })
+      }
+      lapply(distribution_sliders, update_triangle_distribution_slider)
     }
-    create_triangle_distribution_slider <- function(slider_name, slider_range=c(0,1)){
+    update_all_distributions()
+    
+    
+    create_triangle_distribution_slider <- function(slider_data){
+      slider_name <- slider_data$name
+      slider_range <- slider_data$range
+      if (any(is.null(slider_range))){
+        slider_range <- c(0,1)
+      }
       # Only get the first "average" value one time on slider creation.
       start <- isolate(input[[paste0(slider_name, "_avg")]])
-      delay(250, session$sendCustomMessage("addExtraDotLabel", c(slider_name, slider_range, start)))
+      
+      delay(300, session$sendCustomMessage("addExtraDotLabel", c(slider_name, slider_range, start)))
     }
-    update_triangle_distribution_slider("min_max_slider")
-    update_triangle_distribution_slider("big_time_slider", slider_range=c(1, 2))
-    # only creates the middle dots after th tab is opened for the first time
+    
+    # only creates the middle dots after the tab is opened for the first time
     i <<- 1
     observe({
       if((input$main_tabs=="Compare Simulations")&&(i==1)){
         if(i==1){
-          create_triangle_distribution_slider("min_max_slider", c(0,1))
-          create_triangle_distribution_slider("big_time_slider", c(1,2))
+          lapply(distribution_sliders, create_triangle_distribution_slider)
+          hide_ui("#simulation_parameters")
           i <<- 2
         }
       }

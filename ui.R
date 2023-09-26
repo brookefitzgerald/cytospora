@@ -337,20 +337,68 @@ compare_simulations_panel <- fluidPage(
         column(
           6, 
           fluidRow(
-            column(6,sliderInput("min_max_slider", "range", value=c(0.1, 0.5), min=0, max=1)),
-            column(6,sliderInput("big_time_slider", "range", value=c(1.2, 1.5), min=1, max=2)),
-            div(
-              id="hidden_avgs",
-              numericInput("min_max_slider_avg",  "", 0.3),
-              numericInput("big_time_slider_avg", "", 1.35),
-              )
-            
-            ),
-          actionButton("run_all_simulations", "Run Many Simulations", class="btn-primary btn-md")
+            column(6, sliderInput(
+              "disease_random_share_of_spread_range", 
+              "range", 
+              value=c(0.0, 0.5),
+              min=0,
+              max=1
+            )),
+            column(6, sliderInput(
+              "inf_intro_range", 
+              "range", 
+              value=c(1, 21), 
+              min=1, 
+              max=576
+            ))
+          ),
+          fluidRow(
+            column(6, sliderInput(
+              "disease_growth_rate_range", 
+              "range", 
+              value=c(0.05, 0.30), 
+              min=0,
+              max=1
+            )),
+            column(6, sliderInput(
+              "treatment_1_effectiveness_range",
+              "",
+              value=c(0.1,0.4),
+              min=0,
+              max=1
+            ))
+          ),
+          fluidRow(
+            column(6, sliderInput(
+              "treatment_2_effectiveness_range",
+              "",
+              value=c(0.3,0.6),
+              min=0,
+              max=1
+            )),
+            column(6, sliderInput(
+              "annual_cost_range",
+              "",
+              value=c(3000, 10000),
+              min=0,
+              max=20000
+            ))
+          ),
+          actionButton("run_all_simulations", "Run Many Simulations", class="btn-primary btn-md center"),
+          tags$div(
+            id="hidden_avgs",
+            numericInput(inputId="disease_random_share_of_spread_range_avg", label="", value=0.25),
+            numericInput(inputId="inf_intro_range_avg",                      label="", value=11),
+            numericInput(inputId="disease_growth_rate_range_avg",            label="", value=0.175),
+            numericInput(inputId="treatment_1_effectiveness_range_avg",      label="", value=0.25),
+            numericInput(inputId="treatment_2_effectiveness_range_avg",      label="", value=0.45),
+            numericInput(inputId="annual_cost_range_avg",                    label="", value=6500),
           )
+        )
       )
-    )
-) 
+   )
+)
+
 
 tutorial_panel <- img(id="coming_soon", src="images/coming_soon.png", class="center", height="500px")
 
