@@ -339,7 +339,14 @@ compare_simulations_panel <- fluidPage(
           fluidRow(
             column(6,sliderInput("min_max_slider", "range", value=c(0.1, 0.5), min=0, max=1)),
             column(6,sliderInput("big_time_slider", "range", value=c(1.2, 1.5), min=1, max=2)),
+            div(
+              id="hidden_avgs",
+              numericInput("min_max_slider_avg",  "", 0.3),
+              numericInput("big_time_slider_avg", "", 1.35),
+              )
+            
             ),
+          actionButton("run_all_simulations", "Run Many Simulations", class="btn-primary btn-md")
           )
       )
     )
@@ -355,10 +362,11 @@ ui <- tabsetPanel(
     tabPanel(
       "dashboard", 
       tabsetPanel(
+        id="main_tabs",
         type="tabs",
-        tabPanel("Main",                main_dashboard_panel),
-        tabPanel("Compare Simulations", compare_simulations_panel),
-        tabPanel("Tutorial",            tutorial_panel)
+        tabPanel("Main",                main_dashboard_panel,      id="main"),
+        tabPanel("Compare Simulations", compare_simulations_panel, id="sims"),
+        tabPanel("Tutorial",            tutorial_panel,            id="tutorial")
       )
     )
 )

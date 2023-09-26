@@ -40,7 +40,12 @@ shinyServer(function(input, output, session) {
   
   # Hide dashboard by default
   hide_ui("#div_dashboard")
+  
+  # Hide parts of the simulation tab
   hide_ui("#loading_spinner")
+  hide_ui("#simulation_outcome_plot")
+  hide_ui("#simulation_parameters")
+  hide_ui("#hidden_avgs")
   
   observeEvent(input$go_to_app, {
     # if user has clicked away from landing page:
@@ -561,15 +566,29 @@ shinyServer(function(input, output, session) {
     ######### Compare simulation outcomes ###########
     
     ##### Set up the triangle distributions for the variables that are changing
-    create_triangle_distribution_slider <- function(slider_name, slider_range=c(0,1)){
-      delay(3000, session$sendCustomMessage("addExtraDotLabel", c(slider_name, slider_range)));
+    update_triangle_distribution_slider <- function(slider_name, slider_range=c(0,1)){
       observeEvent(input[[slider_name]], {
         session$sendCustomMessage("updateSliderBoundsForExtraDot", c(slider_name, slider_range))
       })
     }
-    create_triangle_distribution_slider("min_max_slider")
-    create_triangle_distribution_slider("big_time_slider", slider_range=c(1, 2))
-    
+    create_triangle_distribution_slider <- function(slider_name, slider_range=c(0,1)){
+      # Only get the first "average" value one time on slider creation.
+      start <- isolate(input[[paste0(slider_name, "_avg")]])
+      delay(250, session$sendCustomMessage("addExtraDotLabel", c(slider_name, slider_range, start)))
+    }
+    update_triangle_distribution_slider("min_max_slider")
+    update_triangle_distribution_slider("big_time_slider", slider_range=c(1, 2))
+    # only creates the middle dots after th tab is opened for the first time
+    i <<- 1
+    observe({
+      if((input$main_tabs=="Compare Simulations")&&(i==1)){
+        if(i==1){
+          create_triangle_distribution_slider("min_max_slider", c(0,1))
+          create_triangle_distribution_slider("big_time_slider", c(1,2))
+          i <<- 2
+        }
+      }
+    })
     
     simulation_output_plot <- reactiveVal(NULL)
     observe({
@@ -606,8 +625,15 @@ shinyServer(function(input, output, session) {
       }
     })
     
-    
     observeEvent(input$simulation_outcome, {
+      show_ui("#simulation_parameters")
+      hide_ui("#loading_spinner")
+      hide_ui("#simulation_outcome_plot")
+    })
+    
+    
+    observeEvent(input$run_all_simulations, {
+      hide_ui("#simulation_parameters")
       if(is.null(input_yield_values())){
         per_year_per_tree_max_yield <- isolate(rep(input$max_yield/n_trees_in_orchard, rv$end_year - rv$start_year + 1))
       } else {
