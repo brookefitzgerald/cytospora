@@ -8,7 +8,6 @@ library(shinyjqui)
 library(tidyverse)
 
 library(glue,       include.only = 'glue')
-library(jrvFinance, include.only = 'irr')
 library(tibbletime, include.only = 'rollify')
 
 source("scripts/gs_connect.R")
@@ -504,15 +503,7 @@ shinyServer(function(input, output, session) {
                     `Treatment 2` = first(time[t2_net_returns_cum  >= first_six_years_max_net_returns]) + 1) %>%
           # TODO: decide if it makes sense or not to have the optimal replanting year when not replanting the entire orchard
           # mutate(across(everything(), ~ifelse(input$replanting_strategy %in% c('tree_replant'), "", .))) %>%
-          t(), check.names = FALSE),
-        #Col 6: IRR
-        data.frame(`Internal Rate of Return`=c(
-            coalesce(irr(tree_health_aggregated_orchard_cost_yield_and_returns$max_net_returns, r.guess=0.05), NA),
-            coalesce(irr(tree_health_aggregated_orchard_cost_yield_and_returns$nt_net_returns, r.guess=0.05), NA),
-            coalesce(irr(tree_health_aggregated_orchard_cost_yield_and_returns$t1_net_returns, r.guess=0.05), NA),
-            coalesce(irr(tree_health_aggregated_orchard_cost_yield_and_returns$t2_net_returns, r.guess=0.05), NA)),
-          row.names=c("Disease Free", "No Treatment", "Treatment 1", "Treatment 2"),
-          check.names=FALSE)
+          t(), check.names = FALSE)
       )
       
       
@@ -531,7 +522,7 @@ shinyServer(function(input, output, session) {
         mutate(
           `Yield (avg/ac/yr)`             = comma(`Yield (avg/ac/yr)`, accuracy=1),
           `Optimal First Replanting Year` = as.character(`Optimal First Replanting Year`),
-          `Internal Rate of Return`       = percent(`Internal Rate of Return`, accuracy=1),
+          #`Internal Rate of Return`       = percent(`Internal Rate of Return`, accuracy=1),
           across(
             c(`Net Returns (avg/ac/yr)`, 
               `Treatment Returns (avg/ac/yr)`,
