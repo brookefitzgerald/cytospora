@@ -624,7 +624,7 @@ shinyServer(function(input, output, session) {
               ### calculate the distribution of simulation outcomes
               generateManySimulations(
                 outcome_target, unchanging_settings, changing_settings, control_settings
-              )) %>% then(
+              ), seed=NULL) %>% then(
                 onFulfilled=function(results_dfm) {
                   ## The data has ran now so we can remove the spinner!
                   hide_ui("#loading_spinner")
@@ -641,6 +641,7 @@ shinyServer(function(input, output, session) {
                     facet_wrap(~as.factor(simulation_control_scenario)) +
                     theme_minimal()
                   output$simulation_outcome_plot <- renderPlot({plot})
+                  show_ui("#simulation_outcome_plot")
                   simulation_output_plot(NULL)
                 }),
             error=function(e){},
@@ -677,22 +678,22 @@ shinyServer(function(input, output, session) {
         remove_tree_block_size=0, # TODO: decide if this should also be removed in blocks
         
         output_price = output_price(),
-        annual_cost = input$annual_cost,
+        input_annual_price_change = input$percent_cost_change/100,
+        output_annual_price_change = input$percent_price_change/100,
         
         ### will remove
         disease_spread_rate = input$disease_spread_rate/100,
-        inf_intro = input$inf_intro,
         t1_cost = input$t1_cost,
         t2_cost = input$t2_cost
       ))
       
       changing_settings <<- isolate(list(
-        disease_random_share_of_spread = input$disease_random_share_of_spread/100, # function expects a percentage (fraction)
-        disease_growth_rate = input$disease_growth_rate/100,
-        control1 = input$control1/100,
-        control2 = input$control2/100,
-        input_annual_price_change = input$percent_cost_change/100,
-        output_annual_price_change = input$percent_price_change/100
+        inf_intro                      = sapply(c(input$inf_intro_range,                      input$inf_intro_range_avg),                      as.numeric, USE.NAMES=F),
+        disease_random_share_of_spread = sapply(c(input$disease_random_share_of_spread_range, input$disease_random_share_of_spread_range_avg), as.numeric, USE.NAMES=F)/100,
+        disease_growth_rate            = sapply(c(input$disease_growth_rate_range,            input$disease_growth_rate_range_avg),            as.numeric, USE.NAMES=F)/100,
+        control1                       = sapply(c(input$treatment_1_effectiveness_range,      input$treatment_1_effectiveness_range_avg),      as.numeric, USE.NAMES=F)/100,
+        control2                       = sapply(c(input$treatment_2_effectiveness_range,      input$treatment_2_effectiveness_range_avg),      as.numeric, USE.NAMES=F)/100,
+        annual_cost                    = sapply(c(input$annual_cost_range,                    input$annual_cost_range_avg),                    as.numeric, USE.NAMES=F)
       ))
       
       
@@ -705,18 +706,25 @@ shinyServer(function(input, output, session) {
       #  replant_tree_block_size=as.numeric(input$replant_tree_block_size)
       #))
       
-      control_settings <<- list(list(
-        replanting_strategy = "tree_replant",
-        replant_tree_block_size = 2
-      ), list(
-        replanting_strategy = "orchard_replant",
-        get_planting_years(n_replant_years = 20)
-      ), list(
-        replanting_strategy = "orchard_replant",
-        get_planting_years(n_replant_years = 15)
+      control_settings <<- list(
+        list(
+          replanting_strategy = "tree_replant",
+          replant_tree_block_size = 2,
+          replant_years = c(20)
+        ), list(
+          replanting_strategy = "orchard_replant",
+          replant_tree_block_size = 0,
+          replant_years=get_planting_years(n_replant_years = 20)
+        ), list(
+          replanting_strategy = "orchard_replant",
+          replant_tree_block_size = 0,
+          replant_years=get_planting_years(n_replant_years = 15)
+        ), list(
+          replanting_strategy = "orchard_replant",
+          replant_tree_block_size = 0,
+          replant_years=get_planting_years(n_replant_years = 10)
+        )
       )
-      )
-      
       ### generate multiple simulations
       
       outcome_target <- input$simulation_outcome

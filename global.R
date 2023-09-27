@@ -230,7 +230,9 @@ simulateControlScenarios <- function(year_start,
   # set all of the same settings that are shared between simulations 
   time_horizon = year_end - year_start
   
-  tree_sim_with_shared_settings <- partial(tree_sim, 
+  tree_sim_with_shared_settings <- partial(tree_sim,
+                                           o_rows=24,
+                                           o_cols=24,
                                            TH=time_horizon,
                                            start_year=year_start,
                                            replant_trees=(replanting_strategy=='tree_replant'),
@@ -264,15 +266,31 @@ simulateControlScenarios <- function(year_start,
 }
 
 generate_setting_change_sets <- function(changing_settings, n_control_settings){
-  require(data.table, include.only="CJ")
-  percent_changes <- c(-0.1, -0.05, 0, 0.05, 0.1)
-  changed_settings <- lapply(changing_settings, function(y){y + percent_changes})
-  changed_settings$disease_random_share_of_spread <- unique(pmax(changed_settings$disease_random_share_of_spread, 0.0))
-  changed_settings$disease_growth_rate            <- unique(pmax(changed_settings$disease_growth_rate, 0.0))
-  changed_settings$control1                       <- unique(pmax(changed_settings$control1, 0.0))
-  changed_settings$control2                       <- unique(pmax(changed_settings$control2, 0.0))
-  changed_settings$control_setting_id <- 1:n_control_settings
-  do.call(CJ, changed_settings)
+  require(EnvStats, include.only = "rtri")
+  n_samples <- 100
+  get_sample_from_triangle_distribution <-function(name, n=n_samples){
+    rtri(n,
+         min=changing_settings[[name]][1],
+         max=changing_settings[[name]][2],
+         mode=changing_settings[[name]][3])
+  }
+  changed_settings <- data.frame(
+    inf_intro                     =get_sample_from_triangle_distribution("inf_intro"),
+    disease_random_share_of_spread=get_sample_from_triangle_distribution("disease_random_share_of_spread"),
+    disease_growth_rate           =get_sample_from_triangle_distribution("disease_growth_rate"),
+    control1                      =get_sample_from_triangle_distribution("control1"),
+    control2                      =get_sample_from_triangle_distribution("control2"),
+    annual_cost                   =get_sample_from_triangle_distribution("annual_cost"),
+    control_setting_id            =rep(1, n_samples)
+  )
+  for (i in 2:n_control_settings){
+    changed_settings <- changed_settings %>% 
+      bind_rows(
+        changed_settings %>%
+          mutate(control_setting_id=i)
+      )
+  }
+  changed_settings
 }
 
 generateManySimulations <- function(simulation_outcome, unchanging_settings, changing_settings, control_settings){
@@ -281,17 +299,16 @@ generateManySimulations <- function(simulation_outcome, unchanging_settings, cha
   max_yield <- unchanging_settings$max_yield
   unchanging_settings$max_yield <- NULL
   results_dfm <- data.frame()
-  
-  sample_set_indices <- sample.int(n=2000)
-  
-  for (i in sample_set_indices){
+  for (i in 1:nrow(setting_change_sets)){
     setting_set <- setting_change_sets[i, ]
     control_setting <- control_settings[setting_set$control_setting_id]
     
     full_settings <- flatten(c(setting_set, control_setting, unchanging_settings))
     full_settings$max_yield <- 15 #max_yield
     full_settings$control_setting_id <- NULL
-    
+    if((i%%100==0)||(i==1)){
+      print(i)
+    }
     simulation_results <- tryCatch(
       do.call(simulateControlScenarios, full_settings) %>%
         select(t1_net_returns, t2_net_returns, x, y, time) %>%
@@ -301,11 +318,22 @@ generateManySimulations <- function(simulation_outcome, unchanging_settings, cha
         summarize(across(-c(time),~mean(.,na.rm = T))) %>% 
         mutate(simulation_control_scenario=setting_set$control_setting_id),
       error=function(e){
-        print(paste("error in index", e, i, "setting: ", changing_settings))
+        print(paste("error in index",i,e, "setting: ",setting_set, collapse=', '))
         NULL},
       NULL)
     if(!is.null(simulation_results)){
-      results_dfm <- rbind(results_dfm, cbind(simulation_results, full_settings))  
+      tryCatch({
+        prev_names <- names(results_dfm)
+        current_results <- cbind(simulation_results, full_settings)
+        results_dfm <- rbind(results_dfm, current_results)
+        },
+        error=function(e){
+          #print(glimpse(current_results))
+          print(paste("error 2 in index", i, e, "different names:", 
+                      paste(setdiff(names(current_results), prev_names), collapse=', ')))
+        }
+      )
+      
     }
     
   }
