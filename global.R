@@ -1,5 +1,6 @@
 #Orchard simulation functions and constants
-
+require(mc2d, include.only = "qpert")
+require(lhs, include.only="randomLHS")
 TREE_FIRST_FULL_YIELD_YEAR <- 5
 
 get_year_from_date <- function(date){
@@ -132,7 +133,7 @@ tree_sim <- function(o_rows=24, #Block dimension row
     
     #Grow trees subject to yearly max yield
     tree_shell[[t+1]] <- tree_shell[[t]] + grow_trees(age_shell[[t]], t) - disease_shell[,,t]
-    
+
     # Treatment costs for all years that we are treating the disease
     control_effort <- ifelse(t >= t_treatment_year, activated_control_effort, 0.0)
     cost_shell[[t+1]] <- cost_shell[[t+1]] + ifelse(control_effort==0.0, 0, control_cost)
@@ -245,7 +246,6 @@ simulateControlScenarios <- function(year_start,
   
   tree_health_nt <- tree_sim_with_shared_settings(inf_starts = inf_intro) %>%   #nt implies no treatment
     rename_with(~str_c("nt_",.),-c(x,y,time))
-  
   #Simulate two control simulations
   #Treatment 1
   t1 <- tree_sim_with_shared_settings(inf_starts = inf_intro,
@@ -266,36 +266,37 @@ simulateControlScenarios <- function(year_start,
 }
 
 generate_setting_change_sets <- function(changing_settings, n_control_settings){
-  require(EnvStats, include.only = "rtri")
-  n_samples <- 100
-  get_sample_from_triangle_distribution <-function(name, n=n_samples){
-    rtri(n,
-         min=changing_settings[[name]][1],
-         max=changing_settings[[name]][2],
-         mode=changing_settings[[name]][3])
+
+  n_samples <- 400
+  # create a latin hypercube sample for all parameters
+  x <- randomLHS(n_samples, length(changing_settings)+1)
+  sampled_settings <- data.frame(x)
+  names(sampled_settings) <- c(names(changing_settings), "control_setting_id")
+  i <- 1
+  for (setting in names(changing_settings)) {
+    sampled_settings[[setting]] <- qpert(
+      x[,i], # latin hyper cube sampled probability
+      min=changing_settings[[setting]][1],
+      max=changing_settings[[setting]][2],
+      mode=changing_settings[[setting]][3]
+    )
+    i <- i+1
   }
-  changed_settings <- data.frame(
-    inf_intro                     =get_sample_from_triangle_distribution("inf_intro"),
-    disease_random_share_of_spread=get_sample_from_triangle_distribution("disease_random_share_of_spread"),
-    disease_growth_rate           =get_sample_from_triangle_distribution("disease_growth_rate"),
-    control1                      =get_sample_from_triangle_distribution("control1"),
-    control2                      =get_sample_from_triangle_distribution("control2"),
-    annual_cost                   =get_sample_from_triangle_distribution("annual_cost"),
-    control_setting_id            =rep(1, n_samples)
-  )
-  for (i in 2:n_control_settings){
-    changed_settings <- changed_settings %>% 
-      bind_rows(
-        changed_settings %>%
-          mutate(control_setting_id=i)
-      )
-  }
-  changed_settings
+  ## The number of infectius introductions is an integer: 
+  sampled_settings[["inf_intro"]] <- round(sampled_settings[["inf_intro"]])
+  ## Add integers of the three control settings:
+  sampled_settings[["control_setting_id"]] <- ceiling(x[,i]*n_control_settings)
+  sampled_settings
 }
 
 generateManySimulations <- function(simulation_outcome, unchanging_settings, changing_settings, control_settings){
+
   n_control_settings <- length(control_settings)
   setting_change_sets <- generate_setting_change_sets(changing_settings, n_control_settings)
+  #not used in the simulation, just in the npv calculation
+  percent_interest <- unchanging_settings$percent_interest
+  unchanging_settings$percent_interest <- NULL
+  # it doesn't like a list when combining lists
   max_yield <- unchanging_settings$max_yield
   unchanging_settings$max_yield <- NULL
   results_dfm <- data.frame()
@@ -304,19 +305,25 @@ generateManySimulations <- function(simulation_outcome, unchanging_settings, cha
     control_setting <- control_settings[setting_set$control_setting_id]
     
     full_settings <- flatten(c(setting_set, control_setting, unchanging_settings))
-    full_settings$max_yield <- 15 #max_yield
+    #readding the list of yields
+    full_settings$max_yield <- max_yield
     full_settings$control_setting_id <- NULL
     if((i%%100==0)||(i==1)){
       print(i)
     }
     simulation_results <- tryCatch(
-      do.call(simulateControlScenarios, full_settings) %>%
-        select(t1_net_returns, t2_net_returns, x, y, time) %>%
-        group_by(time) %>%
-        summarize(across(c(t1_net_returns, t2_net_returns),~sum(.,na.rm = T))) %>%
-        ungroup() %>%
-        summarize(across(-c(time),~mean(.,na.rm = T))) %>% 
-        mutate(simulation_control_scenario=setting_set$control_setting_id),
+      {
+        results <- do.call(simulateControlScenarios, full_settings) %>%
+          select(nt_net_returns, t1_net_returns, t2_net_returns, x, y, time) %>%
+          group_by(time) %>%
+          summarize(across(c(t1_net_returns, t2_net_returns, nt_net_returns),~sum(.,na.rm = T))) %>%
+          ungroup() %>%
+          mutate(npv_multiplier=1/((1+percent_interest/100.0)**(time - unchanging_settings$year_start))) %>%
+          summarize(across(-c(time),list(avg=~mean(.,na.rm = T), npv=~sum(.*npv_multiplier)), .names="{.col}_{.fn}")) %>% 
+          mutate(simulation_control_scenario=setting_set$control_setting_id)
+        
+        results
+      },
       error=function(e){
         print(paste("error in index",i,e, "setting: ",setting_set, collapse=', '))
         NULL},
@@ -324,11 +331,14 @@ generateManySimulations <- function(simulation_outcome, unchanging_settings, cha
     if(!is.null(simulation_results)){
       tryCatch({
         prev_names <- names(results_dfm)
+        
+        full_settings[['replant_years']]<- paste(full_settings[['replant_years']], collapse=" ")
+        
+        full_settings[['max_yield']]<- paste(full_settings[['max_yield']], collapse=" ")
         current_results <- cbind(simulation_results, full_settings)
         results_dfm <- rbind(results_dfm, current_results)
         },
         error=function(e){
-          #print(glimpse(current_results))
           print(paste("error 2 in index", i, e, "different names:", 
                       paste(setdiff(names(current_results), prev_names), collapse=', ')))
         }
@@ -428,3 +438,44 @@ plot_tree_yield <- function(df, x_coord, y_coord){
   )
 }
 
+base_treatment_comparison_plot <- function(df, ylabel="", label_function=label_dollar()){
+  ggplot(df, aes(x=Treatment, fill=Treatment, y=avg, ymin=lower, ymax=upper)) +
+    geom_bar(stat="identity") +
+    geom_errorbar(width = 0.5, size=1) +
+    scale_y_continuous(labels=label_function) +
+    labs(y=ylabel) +
+    theme_minimal(base_size = 15)
+}
+
+plot_treatment_simulation_averages <- function(df){
+  df %>%
+  mutate(npv_t1_returns=t1_net_returns_npv,     
+         npv_t2_returns=t2_net_returns_npv) %>% 
+  pivot_longer(c(npv_t1_returns, npv_t2_returns), names_to="Treatment", names_pattern="npv_(..)_returns", values_to="returns_to_treatment") %>%
+  group_by(Treatment) %>%
+  summarize(avg=mean(returns_to_treatment),
+            se_=1.96*sd(returns_to_treatment),
+            lower=avg - se_,
+            upper=avg + se_) %>%
+  base_treatment_comparison_plot(ylabel="Net present value of each treatment")
+}
+plot_treatment_simulation_proportions <- function(df){
+  df %>%
+    summarize(
+      n_=n(),
+      p_t1 = sum(t1_net_returns_npv > t2_net_returns_npv)/n_,
+      p_t2 = sum(t2_net_returns_npv > t1_net_returns_npv)/n_
+    ) %>%
+    mutate(
+      se_=1.96*sqrt(p_t1*p_t2/n_)
+    ) %>% pivot_longer(
+      starts_with("p_"),
+      names_to = "Treatment",
+      names_prefix = "p_",
+      values_to="avg"
+    ) %>% 
+    mutate(
+      lower=avg - se_,
+      upper=avg + se_
+    ) %>%
+    base_treatment_comparison_plot(ylabel="Percentage of simulations with higher net present value", label_function=label_percent())

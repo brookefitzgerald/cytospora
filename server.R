@@ -6,6 +6,7 @@ library(shiny)
 library(shinyjs)
 library(shinyjqui)
 library(tidyverse)
+library(patchwork)
 
 library(glue,       include.only = 'glue')
 library(tibbletime, include.only = 'rollify')
@@ -619,20 +620,15 @@ shinyServer(function(input, output, session) {
                 onFulfilled=function(results_dfm) {
                   ## The data has ran now so we can remove the spinner!
                   hide_ui("#loading_spinner")
-                  # plots a histogram of the completed outcomes
-                  plot <- results_dfm %>%
-                    pivot_longer(
-                      ends_with("net_returns"),
-                      values_to="avg_net_returns", 
-                      names_pattern = "(..)_net_returns", 
-                      names_to="Treatment") %>%
-                    ggplot(aes(x=avg_net_returns, fill=Treatment)) + 
-                    geom_histogram(position="dodge") + 
-                    scale_x_continuous(labels=label_dollar()) +
-                    facet_wrap(~as.factor(simulation_control_scenario)) +
-                    theme_minimal()
-                  output$simulation_outcome_plot <- renderPlot({plot})
+                  simulation_output_data(results_dfm)
+                  
+                  npv_comparison <- plot_treatment_simulation_averages(results_dfm)
+                  winning_comparison <- plot_treatment_simulation_proportions(results_dfm)
+                  # the NPV differences and percentages of similarities
+                  plot <- npv_comparison + winning_comparison
                   show_ui("#simulation_outcome_plot")
+                  output$simulation_outcome_plot <- renderPlot({plot})
+                  show_ui("#reset_simulations_div")
                   simulation_output_plot(NULL)
                 }),
             error=function(e){},
@@ -642,17 +638,17 @@ shinyServer(function(input, output, session) {
       }
     })
     
-    observeEvent(input$simulation_outcome, {
-      show_ui("#simulation_parameters")
-      hide_ui("#loading_spinner")
+    observeEvent(input$reset_simulations, {
+      hide_ui("#reset_simulations_div")
       hide_ui("#simulation_outcome_plot")
+      output$simulation_outcome_plot <- renderPlot({})
+      show_ui("#compare_treatments")
     })
     
-    
-    observeEvent(input$run_all_simulations, {
-      hide_ui("#simulation_parameters")
+    observeEvent(input$simulate_treatment_diffs, {
+      hide_ui("#compare_treatments")
       if(is.null(input_yield_values())){
-        per_year_per_tree_max_yield <- isolate(rep(input$max_yield/n_trees_in_orchard, rv$end_year - rv$start_year + 1))
+        per_year_per_tree_max_yield <- isolate(input$max_yield/n_trees_in_orchard)
       } else {
         per_year_per_tree_max_yield <- isolate(input_yield_values())
       }
@@ -674,56 +670,48 @@ shinyServer(function(input, output, session) {
         
         ### will remove
         disease_spread_rate = input$disease_spread_rate/100,
-        t1_cost = input$t1_cost,
-        t2_cost = input$t2_cost
+        percent_interest = 3,
+        annual_cost=input$annual_cost
       ))
       
       changing_settings <<- isolate(list(
         inf_intro                      = sapply(c(input$inf_intro_range,                      input$inf_intro_range_avg),                      as.numeric, USE.NAMES=F),
-        disease_random_share_of_spread = sapply(c(input$disease_random_share_of_spread_range, input$disease_random_share_of_spread_range_avg), as.numeric, USE.NAMES=F)/100,
-        disease_growth_rate            = sapply(c(input$disease_growth_rate_range,            input$disease_growth_rate_range_avg),            as.numeric, USE.NAMES=F)/100,
-        control1                       = sapply(c(input$treatment_1_effectiveness_range,      input$treatment_1_effectiveness_range_avg),      as.numeric, USE.NAMES=F)/100,
-        control2                       = sapply(c(input$treatment_2_effectiveness_range,      input$treatment_2_effectiveness_range_avg),      as.numeric, USE.NAMES=F)/100,
-        annual_cost                    = sapply(c(input$annual_cost_range,                    input$annual_cost_range_avg),                    as.numeric, USE.NAMES=F)
+        disease_random_share_of_spread = sapply(c(input$disease_random_share_of_spread_range, input$disease_random_share_of_spread_range_avg), as.numeric, USE.NAMES=F),
+        disease_growth_rate            = sapply(c(input$disease_growth_rate_range,            input$disease_growth_rate_range_avg),            as.numeric, USE.NAMES=F),
+        control1                       = sapply(c(input$treatment_1_effectiveness_range,      input$treatment_1_effectiveness_range_avg),      as.numeric, USE.NAMES=F),
+        control2                       = sapply(c(input$treatment_2_effectiveness_range,      input$treatment_2_effectiveness_range_avg),      as.numeric, USE.NAMES=F),
+        t1_cost                        = sapply(c(input$treatment_1_cost_range,               input$treatment_1_cost_range_avg),               as.numeric, USE.NAMES=F),
+        t2_cost                        = sapply(c(input$treatment_2_cost_range,               input$treatment_2_cost_range_avg),               as.numeric, USE.NAMES=F),
       ))
       
       
       ### I'm thinking about adding these as other control strategies, 
       ### but it's difficult because it exponentiates the processing time
       
-      #control_settings <- isolate(list(
-      #  replanting_strategy = input$replanting_strategy,
-      #  replant_years = get_planting_years(),
-      #  replant_tree_block_size=as.numeric(input$replant_tree_block_size)
-      #))
-      
       control_settings <<- list(
         list(
-          replanting_strategy = "tree_replant",
-          replant_tree_block_size = 2,
-          replant_years = c(20)
-        ), list(
+       #  replanting_strategy = "tree_replant",
+       #  replant_tree_block_size = 2,
+       #  replant_years = c(20)
+       #), list(
           replanting_strategy = "orchard_replant",
           replant_tree_block_size = 0,
           replant_years=get_planting_years(n_replant_years = 20)
-        ), list(
-          replanting_strategy = "orchard_replant",
-          replant_tree_block_size = 0,
-          replant_years=get_planting_years(n_replant_years = 15)
-        ), list(
-          replanting_strategy = "orchard_replant",
-          replant_tree_block_size = 0,
-          replant_years=get_planting_years(n_replant_years = 10)
         )
+       #, list(
+       #   replanting_strategy = "orchard_replant",
+       #   replant_tree_block_size = 0,
+       #   replant_years=get_planting_years(n_replant_years = 15)
+       # ), list(
+       #   replanting_strategy = "orchard_replant",
+       #   replant_tree_block_size = 0,
+       #   replant_years=get_planting_years(n_replant_years = 10)
+       # )
       )
       ### generate multiple simulations
-      
-      outcome_target <- input$simulation_outcome
-      if (outcome_target!=""){
-        show_ui("#loading_spinner")
-        output$simulation_outcome_plot <- renderPlot({})
-        delay(1000, simulation_output_plot("started_simulations"))
-      }
+      show_ui("#loading_spinner")
+      output$simulation_outcome_plot <- renderPlot({})
+      delay(1000, simulation_output_plot("started_simulations"))
     })
   
 })
