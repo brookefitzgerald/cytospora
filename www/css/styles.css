@@ -13,11 +13,37 @@ p {
   text-align: center;
   font-size: 24px;
 }
+
+p.desc {
+  text-align: center;
+  font-size: 18px;
+}
 .center {
   display: block;
   margin-left: auto;
   margin-right: auto;
   vertical-align: middle;
+}
+
+.center-container {
+  display: flex;
+  margin-right: 15%;
+  justify-content: center;
+}
+.sims {
+  display: inline-block;
+  text-align: center;
+}
+.sims.first {
+  width: 80%;
+  margin-left: auto;
+  margin-right: -5px;
+}
+
+.sims.second {
+  margin-left: 0px;
+  margin-right: auto; /* Remove the margin from the last button to make them touch */
+  width: auto;
 }
 
 .btn#go_to_app {

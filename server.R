@@ -46,6 +46,11 @@ shinyServer(function(input, output, session) {
   hide_ui("#simulation_outcome_plot")
   hide_ui("#simulation_parameters")
   hide_ui("#hidden_avgs")
+  hide_ui("#reset_simulations_div")
+  
+  observeEvent(input$simulation_treatments_menu_toggle, {
+    jqui_toggle("#treatment_simulation_parameters", effect="blind")
+  })
   
   observeEvent(input$go_to_app, {
     # if user has clicked away from landing page:
@@ -69,7 +74,8 @@ shinyServer(function(input, output, session) {
     "#replanting_menu",
     "#treatments_menu",
     "#tree_replant_inputs",
-    "#tree_remove_inputs"
+    "#tree_remove_inputs",
+    "#other_settings_menu"
   )) {hide_ui(ui=initially_hidden_menu)}
   
   # Store data on hidden menus
@@ -77,7 +83,8 @@ shinyServer(function(input, output, session) {
     costs=TRUE,
     disease=TRUE,
     replanting=TRUE,
-    treatments=TRUE
+    treatments=TRUE,
+    other_settings=TRUE
   )
   
   # Updates the class of the arrow icon to make it rotate when hidden. 
@@ -119,6 +126,9 @@ shinyServer(function(input, output, session) {
   
   setup_toggle_menu_options('treatments')
   setup_toggle_menu_close('treatments')
+  
+  setup_toggle_menu_options('other_settings')
+  setup_toggle_menu_close('other_settings')
   
   # Update year slider ranges conditional on time horizon
   keep_year_proportion <- function(old_value, old_start, old_end, start, end){
@@ -565,6 +575,8 @@ shinyServer(function(input, output, session) {
       list(name="disease_growth_rate_range"),
       list(name="treatment_1_effectiveness_range"),
       list(name="treatment_2_effectiveness_range"),
+      list(name="treatment_1_cost_range", range=c(0,2000)),
+      list(name="treatment_2_cost_range", range=c(0,2000)),
       list(name="annual_cost_range", range=c(0,20000))
     )
     update_all_distributions <- function(){
@@ -607,7 +619,28 @@ shinyServer(function(input, output, session) {
       }
     })
     
+    n_reset <- reactiveVal(1)
+    observeEvent(input$treatment_simulation_parameters_dropdown, {
+      if(n_reset()==1){
+        delay(500, update_all_distributions())
+        n_reset(2)
+      }
+      
+    })
+    
     simulation_output_plot <- reactiveVal(NULL)
+    simulation_output_data <- reactiveVal(NULL)
+    output$download_simulation_results <- downloadHandler(
+      filename = function() {
+        # Use the selected dataset as the suggested file name
+        "simulation_results.csv"
+      },
+      content = function(file) {
+        # Write the dataset to the `file` that will be downloaded
+        write.csv(simulation_output_data(), file)
+      }
+    )
+    
     observe({
       if(!is.null(simulation_output_plot())){
         if(simulation_output_plot()=="started_simulations"){

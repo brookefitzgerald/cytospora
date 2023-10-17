@@ -318,73 +318,134 @@ main_dashboard_panel <- tags$div(
       )
     )
 
+all_other_settings <- tags$div(
+  id="other_settings_menu", 
+  column(
+    6,
+      sliderInput(
+        "disease_random_share_of_spread_range", 
+        "Percent of disease sprad randomly", 
+        value=c(0.0, 0.5),
+        min=0,
+        max=1
+      ),
+      sliderInput(
+        "disease_growth_rate_range", 
+        "Disease growth rate", 
+        value=c(0.05, 0.30), 
+        min=0,
+        max=1
+      ),
+  ),
+  column(6, 
+         fluidRow(
+           sliderInput(
+             "inf_intro_range", 
+             "Number of infectius introductions", 
+             value=c(1, 21), 
+             min=1, 
+             max=576
+           )),
+         fluidRow(
+           sliderInput(
+             "annual_cost_range",
+             "Annual cost range",
+             pre="$",
+             value=c(3000, 10000),
+             min=0,
+             max=20000
+           )),
+  ),
+  actionButton("other_settings_menu_hide", "Close menu")
+)
+
+treatment_simulation_parameters <- tags$div(
+  id="treatment_simulation_parameters",
+  column(6, 
+         sliderInput(
+           "treatment_1_effectiveness_range",
+           "Treatment 1 Effectiveness",
+           value=c(0.1,0.4),
+           min=0,
+           max=1
+         ),
+         sliderInput(
+           "treatment_1_cost_range",
+           "Treatment 1 Annual Cost",
+           pre="$",
+           value=c(300,600),
+           min=0,
+           max=2000
+         ),
+  ),
+  column(6, 
+         sliderInput(
+           "treatment_2_effectiveness_range",
+           "Treatment 2 Effectiveness",
+           value=c(0.3,0.5),
+           min=0,
+           max=1
+         ), 
+         sliderInput(
+           "treatment_2_cost_range",
+           "Treatment 2 Annual Cost",
+           pre="$",
+           value=c(600,12600),
+           min=0,
+           max=2000
+         )
+  ),
+  actionButton("other_settings_menu_toggle", menuIconLabel("All Other Settings", id_prefix="other_settings"), width="80%", class=c("menu", "center")),
+  all_other_settings
+)
+
 compare_simulations_panel <- fluidPage(
     fluidRow(
-      column(8, tags$h1("Compare Simulations By Outcome:")),
-      column(4, selectizeInput(
-        'simulation_outcome', '', 
-        choices = c("Average Yearly Net Returns", "Net Present Value"),
-        options = list(
-          placeholder = 'Please select a simulation outcome below',
-          onInitialize = I('function() { this.setValue(""); }')
-        )))
+      column(8, tags$h1("Compare Simulations By Outcome:"))
     ),
     fluidRow(
       img(id="loading_spinner", src="images/loading_spinner_200px.gif", class="center"),
       plotOutput("simulation_outcome_plot", height="350px"),
       tags$div(
-        id="simulation_parameters", 
-        column(
-          6, 
-          fluidRow(
-            column(6, sliderInput(
-              "disease_random_share_of_spread_range", 
-              "range", 
-              value=c(0.0, 0.5),
-              min=0,
-              max=1
-            )),
-            column(6, sliderInput(
-              "inf_intro_range", 
-              "range", 
-              value=c(1, 21), 
-              min=1, 
-              max=576
-            ))
+        id="reset_simulations_div",
+        actionButton("reset_simulations",           "Try Other Simulation", inline=TRUE),
+        downloadButton("download_simulation_results", "Download Simulation Results", inline=TRUE),
+        class="center-container"
+      ),
+      tags$div(
+        id="compare_treatments",
+        fluidRow(
+          column(
+            6, 
+            tags$h2("Treatment 1", style="text-align: center;"),
+            tags$p("Cheaper, but less effective"),
+            tags$i(tags$p("(i.e. fungicide)", class="desc"))
+          ),column(
+            6, 
+            tags$h2("Treatment 2", style="text-align: center;"),
+            tags$p("More effective, but more expensive"),
+            tags$i(tags$p("(i.e. labor intensive pruning and painting with latex/captan mixture)", class="desc"))
+          )
+        ),
+        fluidRow(
+          tags$div(
+            actionButton("simulate_treatment_diffs", label="Compare Treatment Differences", class=c("btn-primary", "sims", "first")),
+            dropdownButton(
+              treatment_simulation_parameters,
+              inputId="treatment_simulation_parameters_dropdown",
+              circle=FALSE,
+              status="sims second btn-primary",
+              icon=icon("sliders"),
+              inline=TRUE,
+              margin="0px",
+              width="600px",
+              right=TRUE
+            ),
+            class="center-container"
           ),
-          fluidRow(
-            column(6, sliderInput(
-              "disease_growth_rate_range", 
-              "range", 
-              value=c(0.05, 0.30), 
-              min=0,
-              max=1
-            )),
-            column(6, sliderInput(
-              "treatment_1_effectiveness_range",
-              "",
-              value=c(0.1,0.4),
-              min=0,
-              max=1
-            ))
-          ),
-          fluidRow(
-            column(6, sliderInput(
-              "treatment_2_effectiveness_range",
-              "",
-              value=c(0.3,0.6),
-              min=0,
-              max=1
-            )),
-            column(6, sliderInput(
-              "annual_cost_range",
-              "",
-              value=c(3000, 10000),
-              min=0,
-              max=20000
-            ))
-          ),
-          actionButton("run_all_simulations", "Run Many Simulations", class="btn-primary btn-md center"),
+        )
+      ),
+          #actionButton("run_all_simulations", "Run Many Simulations", class="btn-primary btn-md center"),
           tags$div(
             id="hidden_avgs",
             numericInput(inputId="disease_random_share_of_spread_range_avg", label="", value=0.25),
@@ -392,13 +453,12 @@ compare_simulations_panel <- fluidPage(
             numericInput(inputId="disease_growth_rate_range_avg",            label="", value=0.175),
             numericInput(inputId="treatment_1_effectiveness_range_avg",      label="", value=0.25),
             numericInput(inputId="treatment_2_effectiveness_range_avg",      label="", value=0.45),
+            numericInput(inputId="treatment_1_cost_range_avg",               label="", value=300),
+            numericInput(inputId="treatment_2_cost_range_avg",               label="", value=600),
             numericInput(inputId="annual_cost_range_avg",                    label="", value=6500),
           )
         )
       )
-   )
-)
-
 
 tutorial_panel <- img(id="coming_soon", src="images/coming_soon.png", class="center", height="500px")
 

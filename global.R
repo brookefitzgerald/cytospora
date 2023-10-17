@@ -67,6 +67,9 @@ tree_sim <- function(o_rows=24, #Block dimension row
   require(matrixcalc)
   require(pracma)
   
+  if(length(max_yield)==1){
+    max_yield <- rep(max_yield, TH)
+  }
   set.seed(sim_seed) #Setting seed for random number generation
   
   #There is an orchard of nxm trees.  
@@ -479,3 +482,4 @@ plot_treatment_simulation_proportions <- function(df){
       upper=avg + se_
     ) %>%
     base_treatment_comparison_plot(ylabel="Percentage of simulations with higher net present value", label_function=label_percent())
+}

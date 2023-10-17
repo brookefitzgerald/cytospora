@@ -111,7 +111,6 @@ $(document).ready(function() {
       middleLabel.style.visibility = 'visible';
       Shiny.setInputValue(slider_id + "_avg", newLabelX);
     }
-    
   }
   
   // Listen for changes in the control slider values
