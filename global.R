@@ -229,6 +229,7 @@ simulateControlScenarios <- function(year_start,
                                      control2,
                                      t2_cost,
                                      replanting_strategy,
+                                     include_nd_and_nt=TRUE,
                                      # dots indicate all other arguments are passed on verbatim to the tree_sim function
                                      ...){ 
   # set all of the same settings that are shared between simulations 
@@ -244,11 +245,6 @@ simulateControlScenarios <- function(year_start,
                                            remove_trees=(replanting_strategy=='tree_remove'),
                                            ...)
   
-  tree_health_max <- tree_sim_with_shared_settings(inf_starts = 0) %>%   #inf_starts=0 implies no infection for Disease Free
-    rename_with(~str_c("max_",.),-c(x,y,time))
-  
-  tree_health_nt <- tree_sim_with_shared_settings(inf_starts = inf_intro) %>%   #nt implies no treatment
-    rename_with(~str_c("nt_",.),-c(x,y,time))
   #Simulate two control simulations
   #Treatment 1
   t1 <- tree_sim_with_shared_settings(inf_starts = inf_intro,
@@ -262,10 +258,21 @@ simulateControlScenarios <- function(year_start,
                                       control_cost = t2_cost) %>%
     rename_with(~str_c("t2_",.),-c(x,y,time))
   
-  inner_join(tree_health_nt,tree_health_max, by = c("x", "y", "time")) %>%
-    inner_join(t1, by = c("x", "y", "time")) %>%
-    inner_join(t2, by = c("x", "y", "time")) %>%
-    rename(`Disease Free`=max_yield,`No Treatment`=nt_yield,`Treatment 1`=t1_yield,`Treatment 2`=t2_yield)
+  results <- inner_join(t1, t2, by = c("x", "y", "time")) %>%
+    rename(`Treatment 1`=t1_yield,`Treatment 2`=t2_yield)
+  
+  if (is.null(include_nd_and_nt) || include_nd_and_nt){
+    tree_health_max <- tree_sim_with_shared_settings(inf_starts = 0) %>%   #inf_starts=0 implies no infection for Disease Free
+      rename_with(~str_c("max_",.),-c(x,y,time))
+    
+    tree_health_nt <- tree_sim_with_shared_settings(inf_starts = inf_intro) %>%   #nt implies no treatment
+      rename_with(~str_c("nt_",.),-c(x,y,time))
+    
+    results <- inner_join(tree_health_nt,tree_health_max, by = c("x", "y", "time")) %>%
+      inner_join(results, by = c("x", "y", "time")) %>%
+      rename(`Disease Free`=max_yield,`No Treatment`=nt_yield)
+  }
+  results
 }
 
 generate_setting_change_sets <- function(changing_settings, n_control_settings){
@@ -293,7 +300,6 @@ generate_setting_change_sets <- function(changing_settings, n_control_settings){
 }
 
 generateManySimulations <- function(simulation_outcome, unchanging_settings, changing_settings, control_settings){
-
   n_control_settings <- length(control_settings)
   setting_change_sets <- generate_setting_change_sets(changing_settings, n_control_settings)
   #not used in the simulation, just in the npv calculation
@@ -311,21 +317,20 @@ generateManySimulations <- function(simulation_outcome, unchanging_settings, cha
     #readding the list of yields
     full_settings$max_yield <- max_yield
     full_settings$control_setting_id <- NULL
+    full_settings$include_nd_and_nt <- FALSE
     if((i%%100==0)||(i==1)){
       print(i)
     }
     simulation_results <- tryCatch(
       {
-        results <- do.call(simulateControlScenarios, full_settings) %>%
-          select(nt_net_returns, t1_net_returns, t2_net_returns, x, y, time) %>%
+        do.call(simulateControlScenarios, full_settings) %>%
+          select(t1_net_returns, t2_net_returns, x, y, time) %>%
           group_by(time) %>%
-          summarize(across(c(t1_net_returns, t2_net_returns, nt_net_returns),~sum(.,na.rm = T))) %>%
+          summarize(across(c(t1_net_returns, t2_net_returns),~sum(.,na.rm = T))) %>%
           ungroup() %>%
           mutate(npv_multiplier=1/((1+percent_interest/100.0)**(time - unchanging_settings$year_start))) %>%
           summarize(across(-c(time),list(avg=~mean(.,na.rm = T), npv=~sum(.*npv_multiplier)), .names="{.col}_{.fn}")) %>% 
           mutate(simulation_control_scenario=setting_set$control_setting_id)
-        
-        results
       },
       error=function(e){
         print(paste("error in index",i,e, "setting: ",setting_set, collapse=', '))
@@ -452,9 +457,11 @@ base_treatment_comparison_plot <- function(df, ylabel="", label_function=label_d
 
 plot_treatment_simulation_averages <- function(df){
   df %>%
-  mutate(npv_t1_returns=t1_net_returns_npv,     
-         npv_t2_returns=t2_net_returns_npv) %>% 
-  pivot_longer(c(npv_t1_returns, npv_t2_returns), names_to="Treatment", names_pattern="npv_(..)_returns", values_to="returns_to_treatment") %>%
+  pivot_longer(
+    c(t1_net_returns_npv, t2_net_returns_npv),
+    names_to="Treatment",
+    names_pattern="(..)_net_returns_npv", 
+    values_to="returns_to_treatment") %>%
   group_by(Treatment) %>%
   summarize(avg=mean(returns_to_treatment),
             se_=1.96*sd(returns_to_treatment),

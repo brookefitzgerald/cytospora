@@ -714,7 +714,7 @@ shinyServer(function(input, output, session) {
         control1                       = sapply(c(input$treatment_1_effectiveness_range,      input$treatment_1_effectiveness_range_avg),      as.numeric, USE.NAMES=F),
         control2                       = sapply(c(input$treatment_2_effectiveness_range,      input$treatment_2_effectiveness_range_avg),      as.numeric, USE.NAMES=F),
         t1_cost                        = sapply(c(input$treatment_1_cost_range,               input$treatment_1_cost_range_avg),               as.numeric, USE.NAMES=F),
-        t2_cost                        = sapply(c(input$treatment_2_cost_range,               input$treatment_2_cost_range_avg),               as.numeric, USE.NAMES=F),
+        t2_cost                        = sapply(c(input$treatment_2_cost_range,               input$treatment_2_cost_range_avg),               as.numeric, USE.NAMES=F)
       ))
       
       
