@@ -291,6 +291,7 @@ shinyServer(function(input, output, session) {
       per_year_per_tree_max_yield <- isolate(input_yield_values())
     }
     simulation_inputs <- isolate(list(
+      include_nd_and_nt=TRUE,
       year_start = rv$start_year,
       year_end = rv$end_year + 1,
       t_disease_year = t_disease_year(),
@@ -334,31 +335,30 @@ shinyServer(function(input, output, session) {
     output$orchard_health <- renderPlotly({
       #Raster blocks with color indicating disease spread
       data2 <- tree_health_data()$data %>%
-        dplyr::select(-ends_with(c("net_returns", "realized_costs"))) %>%
+        
+        dplyr::select(c("time", "x", "y", ends_with("disease"))) %>%
         dplyr::filter(time==current_year()) %>%
-        mutate(
-          `No Treatment`=ifelse(nt_tree_age==0, NA, `No Treatment`),
-          `Treatment 1`=ifelse(t1_tree_age==0, NA, `Treatment 1`),
-          `Treatment 2`=ifelse(t2_tree_age==0, NA, `Treatment 2`)) %>%
-        dplyr::select(-ends_with("tree_age")) %>%
-        mutate(across(-c(x,y,time), ~ifelse(`Disease Free`>0, ./`Disease Free`, 1))) %>%
-        dplyr::select(-c(`Disease Free`)) %>%
+        rename(
+          `No Treatment`=nt_disease,
+          `Treatment 1`=t1_disease,
+          `Treatment 2`=t2_disease) %>%
+        select(-max_disease) %>%
         pivot_longer(-c(x,y,time)) %>%
-        mutate(yield=ifelse(value<0,0,value))
+        mutate(disease=ifelse(value<0,0,value))
         
         # Use ggplot to plot the yield heatmap
         plot <- data2 %>%
           # The following lines ensure that if all of the yields are the same then 
           # the plot doesn't turn grey (consequence of plotly converting the colorscale)
-          add_row(x=-2, y=1, yield=0, name='No Treatment') %>%
-          add_row(x=-1, y=1, yield=1, name='No Treatment') %>%
-          add_row(x=-2, y=1, yield=0, name='Treatment 1') %>%
-          add_row(x=-1, y=1, yield=1, name='Treatment 1') %>%
-          add_row(x=-2, y=1, yield=0, name='Treatment 2') %>%
-          add_row(x=-1, y=1, yield=1, name='Treatment 2') %>%
-          ggplot(aes(x=x,y=y,fill=yield)) +
+          add_row(x=-2, y=1, disease=0, name='No Treatment') %>%
+          add_row(x=-1, y=1, disease=1, name='No Treatment') %>%
+          add_row(x=-2, y=1, disease=0, name='Treatment 1') %>%
+          add_row(x=-1, y=1, disease=1, name='Treatment 1') %>%
+          add_row(x=-2, y=1, disease=0, name='Treatment 2') %>%
+          add_row(x=-1, y=1, disease=1, name='Treatment 2') %>%
+          ggplot(aes(x=x,y=y,fill=disease)) +
           geom_tile(size=.1,show.legend = F) +
-          scale_fill_gradient(name="Tree Health",low = "red", high = "green", limits=c(0,1)) +
+          scale_fill_gradient(name="Tree Health",low = "green", high = "red", limits=c(0,1)) +
           scale_x_continuous(name = "Column") +
           scale_y_continuous(name = "Row") +
           theme_bw(base_size = 15) +
@@ -422,7 +422,7 @@ shinyServer(function(input, output, session) {
       # if hovering, plot the tree's yield over time. If not hovering, plot the
       # table row selected, otherwise render the overall orchard yield.
       selected_row <- input$mytable_rows_selected
-      df <- tree_health_data()$data %>% select(-ends_with("tree_age"))
+      df <- tree_health_data()$data %>% select(-ends_with(c("tree_age", "disease")))
       
       if (!is.null(most_recent_x_y_hover())) {
         p <- plot_tree_yield(df, x_coord=most_recent_x_y_hover()[["x"]], y_coord=most_recent_x_y_hover()[["y"]])
@@ -453,7 +453,7 @@ shinyServer(function(input, output, session) {
     output$mytable <- DT::renderDataTable({
       run_data_and_id <- tree_health_data()
       tree_health_aggregated_orchard_cost_yield_and_returns <- run_data_and_id$data %>%
-        select(-ends_with("tree_age")) %>%
+        select(-ends_with(c("tree_age", "disease"))) %>%
         group_by(time) %>%
         summarize(across(-c(x,y),~sum(.,na.rm = T))) %>%
         ungroup()

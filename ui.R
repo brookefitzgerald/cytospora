@@ -390,7 +390,7 @@ treatment_simulation_parameters <- tags$div(
            "treatment_2_cost_range",
            "Treatment 2 Annual Cost",
            pre="$",
-           value=c(600,12600),
+           value=c(600,1200),
            min=0,
            max=2000
          )
