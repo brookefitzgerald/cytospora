@@ -66,27 +66,11 @@ tree_sim <- function(o_rows=24, #Block dimension row
     }
   }
   
-  #Disease spread matrix 
-  
+  #Disease spread matrices
   tmat_x <- (shift.right(eye(o_rows,o_cols)) + shift.left(eye(o_rows,o_cols)))
   tmat_y <- tmat_x
-  n <- 3
-  if(n_neighboring_rows > 1){
-    for (n in 2:n_neighboring_rows){
-      old <- tmat_x
-      tmat_x <- tmat_x + (shift.right(eye(o_rows,o_cols), cols = n) + shift.left(eye(o_rows,o_cols), cols = n))
-    }
-  }
-  tmat_y <- tmat_x
-  orig <- inf_mat%*%tmat_x + t(t(inf_mat)%*%tmat_y)
-  orig +inf_mat%*%tmat_x2 + t(t(inf_mat)%*%tmat_y2)
- 
-  
-  
-  mat <- imat%*%tmats[[i]]
-  return_mat <- return_mat + shift.up(mat, n-i) + shift.down(mat, n-i)
-  #tmat_x2 <- (shift.right(eye(o_rows,o_cols), cols=2) + shift.left(eye(o_rows,o_cols), cols=2))
-  #tmat_y2 <- tmat_x2
+  tmat_x2 <- (shift.right(eye(o_rows,o_cols), cols=2) + shift.left(eye(o_rows,o_cols), cols=2))
+  tmat_y2 <- tmat_x2
   
   #Initial conditions
   #Trees
@@ -161,11 +145,11 @@ tree_sim <- function(o_rows=24, #Block dimension row
     age_shell[[t+1]] <- age_shell[[t]] + 1
     
     #Grow trees subject to yearly max yield
-    current_max_yield <- get_yearly_yields(age_shell[[t]], max_yield, t)
+    current_max_yield <- get_yearly_yields(age_shell[[t]], pruning_yield_impacts[,,t], max_yield[t])
     
     # if the tree is infected, but was infected as a baby, their yield is limited to half of the maximum yield of a full grown tree
-    yield_limits <- (1-((years_infected>0) & ((age_shell[[t]] - years_infected) <=2))*0.5)*max_yield[t]
-    tree_shell[[t+1]] <- pmin(current_max_yield - yield_disease_penalty(disease_shell[,,t], current_max_yield), yield_limits)
+    #yield_limits <- (1-((years_infected>0) & ((age_shell[[t]] - years_infected) <=2))*0.5)*max_yield[t]
+    tree_shell[[t+1]] <- pmin(current_max_yield - yield_disease_penalty(disease_shell[,,t], current_max_yield))
 
     # Treatment costs for all years that we are treating the disease
     control_effort <- ifelse(t >= t_treatment_year, activated_control_effort, 0.0)
@@ -181,35 +165,44 @@ tree_sim <- function(o_rows=24, #Block dimension row
         shift.up(n_neighboring_trees_w_disease, 1) + 
         shift.down(n_neighboring_trees_w_disease, 1)
       )
-      n_non_neighbors_infected <- sum(infected_state[,,t]) - n_1_neighboring_trees_w_disease - n_2_neighboring_trees_w_disease
-      # From probability of infection to changing infection states
       
-      prob_infected <- 1-exp(-(L1*n_neighboring_trees_w_disease + L2*n_2_neighboring_trees_w_disease + L3*n_non_neighbors_infected))
-      prob_infected <- pmax(zeros(o_rows, o_cols), prob_infected - control_effort) # control effort reduces the probability of spread, bounded between 0 and 1
-      infected_state[,,t+1] <- infected_state[,,t] | runif(prob_infected) <= prob_infected
+      # From probability of infection to changing infection states
+      # closest and second level infections always have a 1% chance of getting infected
+      prob_infected <- 1-exp(-(L1*n_neighboring_trees_w_disease + L2*n_2_neighboring_trees_w_disease)) + 0.01 
+      # control effort reduces the probability of spread, bounded between 0 and 1, only non-zero if t_treatment_year>=t
+      prob_infected <- prob_infected*(1-control_effort)
+      infected_state[,,t+1] <- infected_state[,,t] | (runif(o_rows*o_cols) <= prob_infected)
+      
       new_infections <- infected_state[,,t+1] - infected_state[,,t]
-      new_trunk_infections <- new_infections*runif(new_infections) > PERCENT_INFECTIONS_IN_BRANCHES # not including old branch transitions
-      branch_to_trunk_infections <- infected_state_branch[,,t]*runif(infected_state_trunk[,,t]) > PERCENT_INFECTIONS_IN_BRANCHES # old branch infections transitioning to trunk infections
+      new_trunk_infections <- new_infections*runif(new_infections) > percentage_treatable_initially 
       
       # add new infections 
-      infected_state_trunk[,,t+1] <-  infected_state_trunk[,,t] + new_trunk_infections + branch_to_trunk_infections
-      infected_state_branch[,,t+1] <- infected_state_branch[,,t] + new_infections - new_trunk_infections - branch_to_trunk_infections
+      infected_state_trunk[,,t+1] <-  infected_state_trunk[,,t] + new_trunk_infections
+      infected_state_branch[,,t+1] <- infected_state_branch[,,t] + new_infections - new_trunk_infections
       
       # The disease grows, and new infections only have baseline disease (1)
-      disease_shell[,,t+1] <- disease_shell[,,t]*(1+disease_growth_rate) + new_infections
+      disease_shell[,,t+1] <- disease_shell[,,t] + infected_state[,,t+1]
       
       # Treating the disease
       years_infected <- years_infected + infected_state[,,t+1]
       
       # if there is control, remove noticeable branch infections
-      treated_branch_infections <- infected_state_branch[,,t+1] & (years_infected>=3) & (runif(years_infected) < detection_effectiveness)
-      years_infected[treated_branch_infections]<- 0
-      disease_shell[,,t+1][treated_branch_infections]<- 0
-      infected_state[,,t+1][treated_branch_infections]<- 0
-      infected_state_branch[,,t+1][treated_branch_infections]<- 0
-      
-      #Disease is mitigated if present
-      disease_shell[,,t+1] <- pmin(2, disease_shell[,,t+1]) # sets disease growth to the maximum amount. Disease is 0 if healthy, and between 1-2 if unhealthy
+      if (t>=t_treatment_year){
+        treated_branch_infections <- infected_state_branch[,,t+1] & (
+          # if a branch disease has been around longer than two years or if disease was probabilistically detected:
+          (disease_shell[,,t+1]>=3) | (runif(prob_infected) < treatable_detection_probability)
+        ) 
+        
+        yield_reduction_probs <- runif(prob_infected)
+        pruning_yield_impacts[,,t+1] <- 0
+        # if treated and full scaffold removal is necessary
+        pruning_yield_impacts[,,t+1][treated_branch_infections & (yield_reduction_probs< PROB_SCAFFOLD_LOSS)] <- PERCENT_YIELD_LOST_FROM_SCAFFOLD_LOSS
+        
+        disease_shell[,,t+1][treated_branch_infections]<- 0
+        infected_state[,,t+1][treated_branch_infections]<- 0
+        infected_state_branch[,,t+1][treated_branch_infections]<- 0
+      }# bounds disease to the maximum amount. Disease is 0 if healthy, and between 1-11 if unhealthy
+      disease_shell[,,t+1] <- pmin(11, disease_shell[,,t+1]) 
     }
     
     #Replace dead trees if part of mitigation strategy
