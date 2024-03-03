@@ -1,10 +1,8 @@
 #Orchard simulation functions and constants
 require(mc2d, include.only = "qpert")
 require(lhs, include.only="randomLHS")
-TREE_FIRST_FULL_YIELD_YEAR <- 5
-TREE_END_YIELD_YEAR <- 35
 library(tidyverse)
-
+library(jsonlite)
 get_year_from_date <- function(date){
   return(as.integer(format(date, "%Y")))
 }
@@ -38,17 +36,23 @@ tree_sim <- function(o_rows=24, #Block dimension row
                      annual_cost=10,   #Annual production cost
                      input_annual_price_change=0.0, # Annual percentage change in input prices
                      output_annual_price_change=0.0, # Annual percentage change in output prices
-                     sim_seed=25){
+                     treatable_detection_probability = 0.95){
   require(plyr, include.only = "alply")
   require(dplyr)
   require(purrr)
   require(matrixcalc)
   require(pracma)
-  
+  constants <- read_json("project_constants.json", simplifyVector = T)
+  L1 <- constants$l1_neighbors_mult_parameter[[1]]
+  L2 <- constants$l2_neighbors_mult_parameter[[1]]
+  PERCENT_INFECTIONS_IN_BRANCHES <- constants$pct_infections_in_branches
+  PROB_SCAFFOLD_LOSS <- constants$probability_of_scaffold_loss
+  PERCENT_YIELD_LOST_FROM_SCAFFOLD_LOSS <- constants$pct_yield_lost_from_scaffold_loss
+  TREE_FIRST_FULL_YIELD_YEAR <- constants$tree_first_full_yield_year
+  TREE_LAST_YIELD_YEAR <- constants$tree_last_yield_year
   if(length(max_yield)==1){
     max_yield <- rep(max_yield, TH)
   }
-  set.seed(sim_seed) #Setting seed for random number generation
   
   #There is an orchard of nxm trees.  
   orc_mat <- ones(o_rows, o_cols)
@@ -63,11 +67,26 @@ tree_sim <- function(o_rows=24, #Block dimension row
   }
   
   #Disease spread matrix 
-  tmat_identity  <- eye(o_rows,o_cols)*(1+disease_growth_rate)
+  
   tmat_x <- (shift.right(eye(o_rows,o_cols)) + shift.left(eye(o_rows,o_cols)))
   tmat_y <- tmat_x
-  tmat_x2 <- (shift.right(eye(o_rows,o_cols), cols=2) + shift.left(eye(o_rows,o_cols), cols=2))
-  tmat_y2 <- tmat_x2
+  n <- 3
+  if(n_neighboring_rows > 1){
+    for (n in 2:n_neighboring_rows){
+      old <- tmat_x
+      tmat_x <- tmat_x + (shift.right(eye(o_rows,o_cols), cols = n) + shift.left(eye(o_rows,o_cols), cols = n))
+    }
+  }
+  tmat_y <- tmat_x
+  orig <- inf_mat%*%tmat_x + t(t(inf_mat)%*%tmat_y)
+  orig +inf_mat%*%tmat_x2 + t(t(inf_mat)%*%tmat_y2)
+ 
+  
+  
+  mat <- imat%*%tmats[[i]]
+  return_mat <- return_mat + shift.up(mat, n-i) + shift.down(mat, n-i)
+  #tmat_x2 <- (shift.right(eye(o_rows,o_cols), cols=2) + shift.left(eye(o_rows,o_cols), cols=2))
+  #tmat_y2 <- tmat_x2
   
   #Initial conditions
   #Trees
@@ -85,7 +104,7 @@ tree_sim <- function(o_rows=24, #Block dimension row
   infected_state_branch <- array(data = NA, dim=c(o_rows, o_cols, TH)) 
   infected_state_trunk <- array(data = NA, dim=c(o_rows, o_cols, TH)) 
   
-  PERCENT_INFECTIONS_IN_BRANCHES <- 2/3
+ 
   initial_trunk_infection_mask <- runif(inf_mat)*inf_mat >= PERCENT_INFECTIONS_IN_BRANCHES
   infected_state_branch[,,1:(t_disease_year - 1)] <- 0
   infected_state_branch[,,t_disease_year] <- (!initial_trunk_infection_mask)*inf_mat
@@ -95,22 +114,21 @@ tree_sim <- function(o_rows=24, #Block dimension row
   years_infected <- inf_mat
   
   yield_disease_penalty <- function(disease, current_max_yield){
-    # disease is a matrix with 0 if there is no disease, and between 1 and 2 if there is disease. 
-    # 1 if first infected after year 3, 1/2 otherwise
-    ((1/(1+150*exp(0.9/0.2*log(2-disease))))*current_max_yield)*(disease>0)
+    # disease is a matrix with 0 if there is no disease, and between 1 and 11 if there is disease
+    ((1/(1+150*exp(-0.1-disease)))*current_max_yield)*(disease>0)
   }
   
-  get_yearly_yields <- function(tree_ages, max_yields, t, tree_first_full_yield_year=TREE_FIRST_FULL_YIELD_YEAR, tree_end_yield_year=TREE_END_YIELD_YEAR){
-    # get this year's max yields
-    max_yield <- max_yields[t]
-    # compute the change in max yields that we should see
-    yields <- c(0,seq(0,max_yield, by=max_yield/(tree_first_full_yield_year-1)), rep(max_yield, tree_end_yield_year-tree_first_full_yield_year))
+  get_yearly_yields <- function(tree_ages, pruning_impacts, max_yield, tree_first_full_yield_year=TREE_FIRST_FULL_YIELD_YEAR, tree_last_yield_year=TREE_LAST_YIELD_YEAR){
+    # compute the change in max yields that we should see for each age
+    yields <- c(0,
+                seq(0,max_yield, by=max_yield/(tree_first_full_yield_year-1)), 
+                rep(max_yield, tree_last_yield_year-tree_first_full_yield_year))
     #return matrix of yields based on how old each tree is
     if(is.null(dim(tree_ages))){
       # Sometimes, ages is coerced into a single number - this re-expands it into a matrix
       tree_ages <- matrix(rep(tree_ages, o_rows*o_cols), nrow=o_rows)
     }
-    apply(tree_ages, c(1,2), function(t){coalesce(yields[t], 0)})
+    apply(tree_ages, c(1,2), function(t){coalesce(yields[t], 0)})*(1-pruning_impacts)
   }
   
   # Setting replanting/removal block size
@@ -153,16 +171,20 @@ tree_sim <- function(o_rows=24, #Block dimension row
     control_effort <- ifelse(t >= t_treatment_year, activated_control_effort, 0.0)
     cost_shell[[t+1]] <- cost_shell[[t+1]] + ifelse(control_effort==0.0, 0, control_cost)
     
-    
     #Propagate disease if disease spread has started
     if (t >= t_disease_year){
       ##### Calculating new disease incidence
       n_neighboring_trees_w_disease <- disease_shell[,,t]%*%tmat_x + t(t(disease_shell[,,t])%*%tmat_y)
       n_2_neighboring_trees_w_disease <- disease_shell[,,t]%*%tmat_x2 + t(t(disease_shell[,,t])%*%tmat_y2)
-      n_non_neighboring_trees_w_disease <- sum(disease_shell[,,t]) - n_neighboring_trees_w_disease - n_2_neighboring_trees_w_disease
-      
+      n_2_neighboring_trees_w_disease <- ( # adding the corners of spread
+        n_2_neighboring_trees_w_disease + 
+        shift.up(n_neighboring_trees_w_disease, 1) + 
+        shift.down(n_neighboring_trees_w_disease, 1)
+      )
+      n_non_neighbors_infected <- sum(infected_state[,,t]) - n_1_neighboring_trees_w_disease - n_2_neighboring_trees_w_disease
       # From probability of infection to changing infection states
-      prob_infected <- 1-exp(-(0.7*n_neighboring_trees_w_disease + 0.08*n_2_neighboring_trees_w_disease + 0.08*disease_random_share_of_spread*n_non_neighboring_trees_w_disease))
+      
+      prob_infected <- 1-exp(-(L1*n_neighboring_trees_w_disease + L2*n_2_neighboring_trees_w_disease + L3*n_non_neighbors_infected))
       prob_infected <- pmax(zeros(o_rows, o_cols), prob_infected - control_effort) # control effort reduces the probability of spread, bounded between 0 and 1
       infected_state[,,t+1] <- infected_state[,,t] | runif(prob_infected) <= prob_infected
       new_infections <- infected_state[,,t+1] - infected_state[,,t]
@@ -179,7 +201,6 @@ tree_sim <- function(o_rows=24, #Block dimension row
       # Treating the disease
       years_infected <- years_infected + infected_state[,,t+1]
       
-      detection_effectiveness <- 0.95
       # if there is control, remove noticeable branch infections
       treated_branch_infections <- infected_state_branch[,,t+1] & (years_infected>=3) & (runif(years_infected) < detection_effectiveness)
       years_infected[treated_branch_infections]<- 0
