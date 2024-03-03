@@ -3,6 +3,17 @@ require(mc2d, include.only = "qpert")
 require(lhs, include.only="randomLHS")
 library(tidyverse)
 library(jsonlite)
+
+constants <- read_json("project_constants.json", simplifyVector = T)
+L1 <- constants$l1_neighbors_mult_parameter
+L2 <- constants$l2_neighbors_mult_parameter
+PERCENT_INFECTIONS_IN_BRANCHES <- constants$pct_infections_in_branches
+PROB_SCAFFOLD_LOSS <- constants$probability_of_scaffold_loss
+PERCENT_YIELD_LOST_FROM_SCAFFOLD_LOSS <- constants$pct_yield_lost_from_scaffold_loss
+TREE_FIRST_FULL_YIELD_YEAR <- constants$tree_first_full_yield_year
+TREE_LAST_YIELD_YEAR <- constants$tree_last_yield_year
+
+
 get_year_from_date <- function(date){
   return(as.integer(format(date, "%Y")))
 }
@@ -36,20 +47,14 @@ tree_sim <- function(o_rows=24, #Block dimension row
                      annual_cost=10,   #Annual production cost
                      input_annual_price_change=0.0, # Annual percentage change in input prices
                      output_annual_price_change=0.0, # Annual percentage change in output prices
-                     treatable_detection_probability = 0.95){
+                     treatable_detection_probability = 0.95,
+                     random_seed = NULL){
   require(plyr, include.only = "alply")
   require(dplyr)
   require(purrr)
   require(matrixcalc)
   require(pracma)
-  constants <- read_json("project_constants.json", simplifyVector = T)
-  L1 <- constants$l1_neighbors_mult_parameter[[1]]
-  L2 <- constants$l2_neighbors_mult_parameter[[1]]
-  PERCENT_INFECTIONS_IN_BRANCHES <- constants$pct_infections_in_branches
-  PROB_SCAFFOLD_LOSS <- constants$probability_of_scaffold_loss
-  PERCENT_YIELD_LOST_FROM_SCAFFOLD_LOSS <- constants$pct_yield_lost_from_scaffold_loss
-  TREE_FIRST_FULL_YIELD_YEAR <- constants$tree_first_full_yield_year
-  TREE_LAST_YIELD_YEAR <- constants$tree_last_yield_year
+  
   if(length(max_yield)==1){
     max_yield <- rep(max_yield, TH)
   }
@@ -58,6 +63,7 @@ tree_sim <- function(o_rows=24, #Block dimension row
   orc_mat <- ones(o_rows, o_cols)
   
   #Seed infection 
+  set.seed(random_seed)
   inf_mat <- zeros(o_rows, o_cols)
   if(inf_starts>0){
     inf_location<-t(replicate(inf_starts,c(sample(o_rows,1),sample(o_cols,1)))) 

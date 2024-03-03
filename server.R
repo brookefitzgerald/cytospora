@@ -291,6 +291,7 @@ shinyServer(function(input, output, session) {
       per_year_per_tree_max_yield <- isolate(input_yield_values())
     }
     simulation_inputs <- isolate(list(
+      random_seed=24,
       include_nd_and_nt=TRUE,
       year_start = rv$start_year,
       year_end = rv$end_year + 1,
