@@ -32,7 +32,7 @@ landing_page_panel <-
       fluidRow(
         column(
           width=6,
-          img(id="logo", src="images/logo.png", class= "center", width="100%", height="250px")
+          img(id="logo", src="images/logo.png", class= "center", height="250px")
         ),
         column(
           width=6,
