@@ -336,29 +336,31 @@ shinyServer(function(input, output, session) {
       #Raster blocks with color indicating disease spread
       data2 <- tree_health_data()$data %>%
         
-        dplyr::select(c("time", "x", "y", ends_with("disease"))) %>%
+        dplyr::select(-ends_with(c("net_returns", "realized_costs", "disease"))) %>%
         dplyr::filter(time==current_year()) %>%
-        rename(
-          `No Treatment`=nt_disease,
-          `Treatment 1`=t1_disease,
-          `Treatment 2`=t2_disease) %>%
-        select(-max_disease) %>%
+        mutate(
+          `No Treatment`=ifelse(nt_tree_age==0, NA, `No Treatment`),
+          `Treatment 1`=ifelse(t1_tree_age==0, NA, `Treatment 1`),
+          `Treatment 2`=ifelse(t2_tree_age==0, NA, `Treatment 2`)) %>%
+        dplyr::select(-ends_with("tree_age")) %>%
+        mutate(across(-c(x,y,time), ~ifelse(`Disease Free`>0, ./`Disease Free`, 1))) %>%
+        dplyr::select(-c(`Disease Free`)) %>%
         pivot_longer(-c(x,y,time)) %>%
-        mutate(disease=ifelse(value<0,0,value))
+        mutate(yield=ifelse(value<0,0,value))
         
         # Use ggplot to plot the yield heatmap
         plot <- data2 %>%
           # The following lines ensure that if all of the yields are the same then 
           # the plot doesn't turn grey (consequence of plotly converting the colorscale)
-          add_row(x=-2, y=1, disease=0, name='No Treatment') %>%
-          add_row(x=-1, y=1, disease=1, name='No Treatment') %>%
-          add_row(x=-2, y=1, disease=0, name='Treatment 1') %>%
-          add_row(x=-1, y=1, disease=1, name='Treatment 1') %>%
-          add_row(x=-2, y=1, disease=0, name='Treatment 2') %>%
-          add_row(x=-1, y=1, disease=1, name='Treatment 2') %>%
-          ggplot(aes(x=x,y=y,fill=disease)) +
+          add_row(x=-2, y=1, yield=0, name='No Treatment') %>%
+          add_row(x=-1, y=1, yield=1, name='No Treatment') %>%
+          add_row(x=-2, y=1, yield=0, name='Treatment 1') %>%
+          add_row(x=-1, y=1, yield=1, name='Treatment 1') %>%
+          add_row(x=-2, y=1, yield=0, name='Treatment 2') %>%
+          add_row(x=-1, y=1, yield=1, name='Treatment 2') %>%
+          ggplot(aes(x=x,y=y,fill=yield)) +
           geom_tile(size=.1,show.legend = F) +
-          scale_fill_gradient(name="Tree Health",low = "green", high = "red", limits=c(0,1)) +
+          scale_fill_gradient(name="Tree Health",low = "red", high = "green", limits=c(0,1)) +
           scale_x_continuous(name = "Column") +
           scale_y_continuous(name = "Row") +
           theme_bw(base_size = 15) +
