@@ -82,6 +82,9 @@ tree_sim <- function(o_rows=24, #Block dimension row
   #Trees
   tree_shell <- vector("list",TH)
   tree_shell[[1]] <- orc_mat
+  #Targeted Pruning Yield Impacts
+  pruning_yield_impacts <-  array(data = NA, dim=c(o_rows, o_cols, TH)) 
+  pruning_yield_impacts[,,1] <- zeros(o_rows, o_cols)
   #Disease
   disease_shell <- array(data = NA, dim=c(o_rows, o_cols, TH)) 
   # making disease shell an array to initialize when the disease starts ahead of time
@@ -101,7 +104,6 @@ tree_sim <- function(o_rows=24, #Block dimension row
   
   infected_state_trunk[,,1:(t_disease_year - 1)] <- 0
   infected_state_trunk[,,t_disease_year] <- (initial_trunk_infection_mask)*inf_mat
-  years_infected <- inf_mat
   
   yield_disease_penalty <- function(disease, current_max_yield){
     # disease is a matrix with 0 if there is no disease, and between 1 and 11 if there is disease
@@ -154,7 +156,7 @@ tree_sim <- function(o_rows=24, #Block dimension row
     current_max_yield <- get_yearly_yields(age_shell[[t]], pruning_yield_impacts[,,t], max_yield[t])
     
     # if the tree is infected, but was infected as a baby, their yield is limited to half of the maximum yield of a full grown tree
-    #yield_limits <- (1-((years_infected>0) & ((age_shell[[t]] - years_infected) <=2))*0.5)*max_yield[t]
+    #yield_limits <- (1-((disease_shell[,,t]>0) & ((age_shell[[t]] - disease_shell[,,t]) <=2))*0.5)*max_yield[t]
     tree_shell[[t+1]] <- pmin(current_max_yield - yield_disease_penalty(disease_shell[,,t], current_max_yield))
 
     # Treatment costs for all years that we are treating the disease
@@ -174,13 +176,13 @@ tree_sim <- function(o_rows=24, #Block dimension row
       
       # From probability of infection to changing infection states
       # closest and second level infections always have a 1% chance of getting infected
-      prob_infected <- 1-exp(-(L1*n_neighboring_trees_w_disease + L2*n_2_neighboring_trees_w_disease)) + 0.01 
+      prob_infected <- 1-exp(-(L1*n_neighboring_trees_w_disease + L2*n_2_neighboring_trees_w_disease)) + if_else(inf_starts>0, 0.01, 0) 
       # control effort reduces the probability of spread, bounded between 0 and 1, only non-zero if t_treatment_year>=t
       prob_infected <- prob_infected*(1-control_effort)
       infected_state[,,t+1] <- infected_state[,,t] | (runif(o_rows*o_cols) <= prob_infected)
       
       new_infections <- infected_state[,,t+1] - infected_state[,,t]
-      new_trunk_infections <- new_infections*runif(new_infections) > percentage_treatable_initially 
+      new_trunk_infections <- new_infections*runif(new_infections) > PERCENT_INFECTIONS_IN_BRANCHES 
       
       # add new infections 
       infected_state_trunk[,,t+1] <-  infected_state_trunk[,,t] + new_trunk_infections
@@ -189,8 +191,6 @@ tree_sim <- function(o_rows=24, #Block dimension row
       # The disease grows, and new infections only have baseline disease (1)
       disease_shell[,,t+1] <- disease_shell[,,t] + infected_state[,,t+1]
       
-      # Treating the disease
-      years_infected <- years_infected + infected_state[,,t+1]
       
       # if there is control, remove noticeable branch infections
       if (t>=t_treatment_year){
@@ -229,7 +229,7 @@ tree_sim <- function(o_rows=24, #Block dimension row
         infected_state[,,t+1][to_replant_or_remove] <- 0.0 # Replanted tree is healthy
         infected_state_branch[,,t+1][to_replant_or_remove] <- 0.0 # Replanted tree is healthy
         infected_state_trunk[,,t+1][to_replant_or_remove] <- 0.0 # Replanted tree is healthy
-        years_infected[to_replant_or_remove] <- 0.0
+        pruning_yield_impacts[,,t+1][to_replant_or_remove] <- 0.0 # Removed tree doesn't have yield decreases
       } else {
         age_shell[[t+1]][to_replant_or_remove] <- 0.0 # Tree is removed
         tree_shell[[t+1]][to_replant_or_remove] <- 0.0 
@@ -237,7 +237,7 @@ tree_sim <- function(o_rows=24, #Block dimension row
         infected_state[,,t+1][to_replant_or_remove] <- 0.0 # Removed tree does not infect neighboring trees
         infected_state_branch[,,t+1][to_replant_or_remove] <- 0.0 # Removed tree does not infect neighboring trees
         infected_state_trunk[,,t+1][to_replant_or_remove] <- 0.0 # Removed tree does not infect neighboring trees
-        years_infected[to_replant_or_remove] <- 0.0
+        pruning_yield_impacts[,,t+1][to_replant_or_remove] <- 0.0 # Removed tree doesn't have yield decreases
       }
       cost_shell[[t+1]] <- cost_shell[[t+1]] + sum(to_replant_or_remove)*replant_or_remove_cost # Number of trees replanted times their cost
     }
@@ -250,13 +250,13 @@ tree_sim <- function(o_rows=24, #Block dimension row
       infected_state[,,t+1] <- shuffled_inf_mat 
       infected_state_trunk[,,t+1] <- shuffled_inf_mat*runif(shuffled_inf_mat) > PERCENT_INFECTIONS_IN_BRANCHES
       infected_state_branch[,,t+1] <-  shuffled_inf_mat - infected_state_trunk[,,t+1]
-      years_infected <- shuffled_inf_mat
+      pruning_yield_impacts[,,t+1] <- 0.0 # Removed tree doesn't have yield decreases
       cost_shell[[t+1]] <- cost_shell[[t+1]] + replant_cost_orchard
     }
     tree_shell[[t+1]] <- pmax(zeros(o_rows, o_cols), tree_shell[[t+1]]) # set negative yields to zero
   }
-  disease_amounts <- alply(disease_shell, 3, .fun=function(disease_mat){pmax(disease_mat-1, 0)})
-  tree_health <- pmap_df(list(tree_shell, c(1:TH), cost_shell, age_shell, max_yield, disease_amounts),
+  disease_list <- alply(disease_shell, 3)
+  tree_health <- pmap_df(list(tree_shell, c(1:TH), cost_shell, age_shell, max_yield, disease_list),
                          function(tree, cntr, yearly_cost, age, yearly_max_yield, disease){
                            # subtracting one from the yield so that the initial yield is truly 0
                            # (non-zero yield is initially necessary for the growth function to work)
