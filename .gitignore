@@ -7,3 +7,4 @@ scripts/gargle
 .Rproj.user/
 cytospora.Rproj
 scripts/.DS_Store
+full_sampled_settings.csv
