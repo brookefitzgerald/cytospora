@@ -5,5 +5,9 @@
   "probability_of_scaffold_loss": [0.01],
   "pct_yield_lost_from_scaffold_loss": [0.3333],
   "tree_first_full_yield_year": [5],
-  "tree_last_yield_year": [25]
+  "tree_last_yield_year": [25],
+  "simulation_main_changing_settings_filepath": "/data/bfitzgerald/cytospora/main_changing_settings.csv",
+  "simulation_base_settings_filepath" : "/data/bfitzgerald/cytospora/base_settings.csv",
+  "simulation_results_filepath": "/data/bfitzgerald/cytospora/simulation_results",
+  "n_samples": [100]
 }

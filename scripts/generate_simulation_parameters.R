@@ -12,24 +12,30 @@ library(stringr)
 
 library(GGally) 
 
-gen_settings_and_save_to_csv <- function(sim_settings_path="full_sampled_settings.csv"){
+constants <- read_json("project_constants.json", simplifyVector = T)
+SETTINGS_MAIN_CHANGING_FP <- constants$simulation_main_changing_settings_filepath
+SETTINGS_BASE_FP <- constants$simulation_base_settings_filepath
+N_SAMPLES <- constants$n_samples
+
+gen_settings_and_save_to_csv <- function(main_changing_settings_path=SETTINGS_MAIN_CHANGING_FP, base_settings_path=SETTINGS_BASE_FP){
   set.seed(43)
   systematic_variables <- list(
-    treatable_detection_probability = seq(0.0,1, 0.05),
+    treatable_detection_probability = seq(0.0,1, 0.1),
     control_effort = seq(0,1, 0.05), # treatment_spread_reduction
     control_cost=seq(100, 2000, 100),
     replanting_year = 13:20
   )
-  n_samples <- 100
+  
   systematic_var_set <- CJ(
     treatable_detection_probability=unlist(systematic_variables["treatable_detection_probability"]),
     control_effort=unlist(systematic_variables["control_effort"]),
     control_cost=unlist(systematic_variables["control_cost"]),
     replant_years=unlist(systematic_variables["replanting_year"]),
-    id=1:n_samples,
     sorted=FALSE)
   
+  write_csv(systematic_var_set, main_changing_settings_path)
   
+  n_samples <- N_SAMPLES
   other_variables <- list(
     max_yield = c(18, 22.5, 24),
     inf_starts = c(round(256*0.01), round(256*0.03), round(256*0.05)) # low 1%, mid 3%, high 5%
@@ -59,7 +65,6 @@ gen_settings_and_save_to_csv <- function(sim_settings_path="full_sampled_setting
   sampled_settings_full <- sampled_settings  %>%
     mutate(
       inf_starts = round(inf_starts),
-      id=row_number(),
       start_year = 0,
       TH=40,
       t_disease_year = 1,
@@ -75,10 +80,9 @@ gen_settings_and_save_to_csv <- function(sim_settings_path="full_sampled_setting
       output_price=1.1,
       input_annual_price_change=0.0,
       output_annual_price_change=0.0
-    ) %>% full_join(systematic_var_set, by=join_by(id), multiple="all") %>% 
-      mutate(replant_years=list(replant_years)) %>% 
-    select(-c(id))
-  write_csv(sampled_settings_full, sim_settings_path)
-  sampled_settings_full
+    )
+  
+  
+  write_csv(sampled_settings_full, base_settings_path)
 }
 full_sampled_settings <- gen_settings_and_save_to_csv()
