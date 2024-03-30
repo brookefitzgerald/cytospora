@@ -349,15 +349,15 @@ shinyServer(function(input, output, session) {
         
         dplyr::select(-ends_with(c("net_returns", "realized_costs", "disease"))) %>%
         dplyr::filter(time==current_year()) %>%
-        mutate(
+        dplyr::mutate(
           `No Treatment`=ifelse(nt_tree_age==0, NA, `No Treatment`),
           `Treatment 1`=ifelse(t1_tree_age==0, NA, `Treatment 1`),
           `Treatment 2`=ifelse(t2_tree_age==0, NA, `Treatment 2`)) %>%
         dplyr::select(-ends_with("tree_age")) %>%
-        mutate(across(-c(x,y,time), ~ifelse(`Disease Free`>0, ./`Disease Free`, 1))) %>%
+        dplyr::mutate(across(-c(x,y,time), ~ifelse(`Disease Free`>0, ./`Disease Free`, 1))) %>%
         dplyr::select(-c(`Disease Free`)) %>%
-        pivot_longer(-c(x,y,time)) %>%
-        mutate(yield=ifelse(value<0,0,value))
+        tidyr::pivot_longer(-c(x,y,time)) %>%
+        dplyr::mutate(yield=ifelse(value<0,0,value))
         # Use ggplot to plot the yield heatmap
         plot <- data2 %>%
           # The following lines ensure that if all of the yields are the same then 
@@ -391,10 +391,10 @@ shinyServer(function(input, output, session) {
                          yaxis = list(constrain="domain", range=c(1, 24), constraintoward='top', label="row"),
                          hovermode='closest') %>%
           # style function updates all traces with the specified options
-          style(hovertemplate="Tree Yield: %{z:.0%} of maximum yield<extra></extra>") %>%
+          plotly::style(hovertemplate="Tree Yield: %{z:.0%} of maximum yield<extra></extra>") %>% 
           # makes the plotly hover event accessible to plot the individual tree yields
-          event_register("plotly_hover") %>% 
-          event_register("plotly_unhover")
+          plotly::event_register('plotly_hover') %>% 
+          plotly::event_register('plotly_unhover')
         
         # This code zooms into the actual data (ignoring the two added rows) and
         # prevents zooming the x axis to see the added rows
@@ -464,10 +464,11 @@ shinyServer(function(input, output, session) {
       }
       
       # Plot selected graph
-      (p + 
+      return(p + 
         plot_line_at_current_year(current_year())) %>%
         ggplotly()  %>%
-        layout(legend = list(orientation = 'h', y=-0.5, fontsize=12)) #Need to split legend over two rows)
+        plotly::layout(legend = list(orientation = 'h', y=-0.5, fontsize=12)) #Need to split legend over two rows)
+      
     })
     
     output$mytable <- DT::renderDataTable({

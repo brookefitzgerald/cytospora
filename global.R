@@ -49,8 +49,7 @@ tree_sim <- function(o_rows=24, #Block dimension row
                      output_annual_price_change=0.0, # Annual percentage change in output prices
                      treatable_detection_probability = 0.95,
                      random_seed = NULL){
-  require(plyr, include.only = "alply")
-  require(dplyr)
+  require(plyr, include.only = "alply"); library(dplyr)
   require(purrr)
   require(matrixcalc)
   require(pracma)
@@ -444,11 +443,11 @@ base_plot <- function(.data, ylab, title, ytickfn=label_comma()){
 plot_net_returns <- function(df) {
   return(
     df %>% select(c(ends_with("net_returns"), time, x, y)) %>%
-      group_by(time) %>%
-      summarize(across(-c(x,y),~sum(.,na.rm = T))) %>%
-      ungroup() %>% 
-      rename(`Disease Free`=max_net_returns,`No Treatment`=nt_net_returns,`Treatment 1`=t1_net_returns,`Treatment 2`=t2_net_returns) %>%
-      pivot_longer(c(-time)) %>%
+      dplyr::group_by(time) %>%
+      dplyr::summarize(across(-c(x,y),~sum(.,na.rm = T))) %>%
+      dplyr::ungroup() %>% 
+      dplyr::rename(`Disease Free`=max_net_returns,`No Treatment`=nt_net_returns,`Treatment 1`=t1_net_returns,`Treatment 2`=t2_net_returns) %>%
+      tidyr::pivot_longer(c(-time)) %>%
       base_plot(ylab="Net returns ($)", title="Net Returns Over Time")
   )
 }
@@ -456,15 +455,15 @@ plot_net_returns <- function(df) {
 plot_returns_to_treatment <- function(df) {
   return(
     df %>% 
-      select(c(ends_with("net_returns"), time, x, y)) %>%
-      group_by(time) %>%
-      summarize(across(-c(x,y),~sum(.,na.rm = T))) %>%
-      ungroup() %>%
-      mutate(t1_net_returns=(t1_net_returns - nt_net_returns),
+      dplyr::select(c(ends_with("net_returns"), time, x, y)) %>%
+      dplyr::group_by(time) %>%
+      dplyr::summarize(across(-c(x,y),~sum(.,na.rm = T))) %>%
+      dplyr::ungroup() %>%
+      dplyr::mutate(t1_net_returns=(t1_net_returns - nt_net_returns),
              t2_net_returns=(t2_net_returns - nt_net_returns)) %>%
-      select(c(t1_net_returns, t2_net_returns, time)) %>%
-      rename(`Treatment 1`=t1_net_returns,`Treatment 2`=t2_net_returns) %>%
-      pivot_longer(c(-time)) %>%
+      dplyr::select(c(t1_net_returns, t2_net_returns, time)) %>%
+      dplyr::rename(`Treatment 1`=t1_net_returns,`Treatment 2`=t2_net_returns) %>%
+      tidyr::pivot_longer(c(-time)) %>%
       base_plot(ylab="Returns to Treatment ($)",title="Returns to Treatment Over Time")
   )
 }
@@ -472,19 +471,19 @@ plot_returns_to_treatment <- function(df) {
 plot_npv <- function(df, r, t0) {
   return(
     df %>% 
-      select(c(ends_with("net_returns"), time, x, y)) %>%
-      group_by(time) %>%
-      summarize(across(-c(x,y),~sum(.,na.rm = T))) %>%
-      ungroup() %>% 
-      mutate(t=time-t0, 
+      dplyr::select(c(ends_with("net_returns"), time, x, y)) %>%
+      dplyr::group_by(time) %>%
+      dplyr::summarize(across(-c(x,y),~sum(.,na.rm = T))) %>%
+      dplyr::ungroup() %>% 
+      dplyr::mutate(t=time-t0, 
              npv_multiplier=((1+r)**-t)) %>% 
-      arrange(desc(t)) %>% 
-      mutate(across(-c(time, npv_multiplier, t),~cumsum(.*npv_multiplier), .names="{.col}_npv")) %>%
-      select(c(ends_with("_npv"), time)) %>%
-      select(-starts_with("max")) %>% 
+      dplyr::arrange(desc(t)) %>% 
+      dplyr::mutate(across(-c(time, npv_multiplier, t),~cumsum(.*npv_multiplier), .names="{.col}_npv")) %>%
+      dplyr::select(c(ends_with("_npv"), time)) %>%
+      dplyr::select(-starts_with("max")) %>% 
       # TODO: change color of traces to be the same as the other plots
-      rename(`No Treatment`=nt_net_returns_npv,`Treatment 1`=t1_net_returns_npv,`Treatment 2`=t2_net_returns_npv) %>%
-      pivot_longer(c(-time)) %>%
+      dplyr::rename(`No Treatment`=nt_net_returns_npv,`Treatment 1`=t1_net_returns_npv,`Treatment 2`=t2_net_returns_npv) %>%
+      tidyr::pivot_longer(c(-time)) %>%
       base_plot(ylab="Net present value ($)",title="Net Present Value Over Time")
   )
 }
@@ -492,9 +491,9 @@ plot_orchard_yield <- function(df) {
   return (
     df %>%
       dplyr::select(-ends_with(c("net_returns", "realized_costs", "disease"))) %>%
-      group_by(time) %>%
-      summarize(across(-c(x,y),~sum(./1000,na.rm = T))) %>%
-      pivot_longer(c(-time)) %>%
+      dplyr::group_by(time) %>%
+      dplyr::summarize(across(-c(x,y),~sum(./1000,na.rm = T))) %>%
+      tidyr::pivot_longer(c(-time)) %>%
       base_plot(ylab="Yield (lbs/ac)", title="Orchard Yield Over Time", ytickfn=unit_format(unit = "K"))
   )
 }
@@ -502,10 +501,10 @@ plot_tree_yield <- function(df, x_coord, y_coord){
   return(
     df %>%
       dplyr::select(-ends_with(c("net_returns", "realized_costs", "disease"))) %>%
-      filter(x==x_coord & y==y_coord) %>%
-      group_by(time) %>%
-      summarize(across(-c(x,y),~sum(.,na.rm = T))) %>%
-      pivot_longer(c(-time)) %>%
+      dplyr::filter(x==x_coord & y==y_coord) %>%
+      dplyr::group_by(time) %>%
+      dplyr::summarize(across(-c(x,y),~sum(.,na.rm = T))) %>%
+      tidyr::pivot_longer(c(-time)) %>%
       base_plot(ylab="Yield (lbs/tree)",title="Tree Yield Over Time")
   )
 }
@@ -521,13 +520,13 @@ base_treatment_comparison_plot <- function(df, ylabel="", label_function=label_d
 
 plot_treatment_simulation_averages <- function(df){
   df %>%
-  pivot_longer(
+  tidyr::pivot_longer(
     c(t1_net_returns_npv, t2_net_returns_npv),
     names_to="Treatment",
     names_pattern="(..)_net_returns_npv", 
     values_to="returns_to_treatment") %>%
-  group_by(Treatment) %>%
-  summarize(avg=mean(returns_to_treatment),
+  dplyr::group_by(Treatment) %>%
+  dplyr::summarize(avg=mean(returns_to_treatment),
             se_=1.96*sd(returns_to_treatment),
             lower=avg - se_,
             upper=avg + se_) %>%
@@ -535,20 +534,21 @@ plot_treatment_simulation_averages <- function(df){
 }
 plot_treatment_simulation_proportions <- function(df){
   df %>%
-    summarize(
+    dplyr::summarize(
       n_=n(),
       p_t1 = sum(t1_net_returns_npv > t2_net_returns_npv)/n_,
       p_t2 = sum(t2_net_returns_npv > t1_net_returns_npv)/n_
     ) %>%
-    mutate(
+    dplyr::mutate(
       se_=1.96*sqrt(p_t1*p_t2/n_)
-    ) %>% pivot_longer(
+    ) %>% 
+    tidyr::pivot_longer(
       starts_with("p_"),
       names_to = "Treatment",
       names_prefix = "p_",
       values_to="avg"
     ) %>% 
-    mutate(
+    dplyr::mutate(
       lower=avg - se_,
       upper=avg + se_
     ) %>%
