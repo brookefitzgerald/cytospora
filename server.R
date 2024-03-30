@@ -316,7 +316,8 @@ shinyServer(function(input, output, session) {
       control2 = input$control2/100,
       t2_cost = input$t2_cost,
       input_annual_price_change=input$percent_cost_change/100,
-      output_annual_price_change=input$percent_price_change/100
+      output_annual_price_change=input$percent_price_change/100,
+      treatable_detection_probability=input$detection_prob
     ))
     simulation_results <- do.call(simulateControlScenarios, simulation_inputs)
     run_id <- rlang::hash(simulation_inputs)
