@@ -16,6 +16,7 @@ constants <- read_json("project_constants.json", simplifyVector = T)
 SETTINGS_MAIN_CHANGING_FP <- constants$simulation_main_changing_settings_filepath
 SETTINGS_BASE_FP <- constants$simulation_base_settings_filepath
 N_SAMPLES <- constants$n_samples
+MEAN_MAX_YIELD <- constants$mean_max_yield_in_simulations
 
 gen_settings_and_save_to_csv <- function(main_changing_settings_path=SETTINGS_MAIN_CHANGING_FP, base_settings_path=SETTINGS_BASE_FP){
   set.seed(43)
@@ -37,7 +38,7 @@ gen_settings_and_save_to_csv <- function(main_changing_settings_path=SETTINGS_MA
   
   n_samples <- N_SAMPLES
   other_variables <- list(
-    max_yield = c(18, 22.5, 24),
+    max_yield = c(18, MEAN_MAX_YIELD, 24),
     inf_starts = c(round(256*0.01), round(256*0.03), round(256*0.05)) # low 1%, mid 3%, high 5%
   )
   
