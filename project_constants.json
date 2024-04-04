@@ -9,5 +9,7 @@
   "simulation_main_changing_settings_filepath": "/data/bfitzgerald/cytospora/main_changing_settings.csv",
   "simulation_base_settings_filepath" : "/data/bfitzgerald/cytospora/base_settings.csv",
   "simulation_results_filepath": "/data/bfitzgerald/cytospora/simulation_results",
-  "n_samples": [100]
+  "n_samples": [100],
+  "mean_max_yield_in_simulations": [22.5],
+  "percent_interest": [0.03]
 }
