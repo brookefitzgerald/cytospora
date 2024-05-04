@@ -14,9 +14,18 @@ library(GGally)
 
 constants <- read_json("project_constants.json", simplifyVector = T)
 SETTINGS_MAIN_CHANGING_FP <- constants$simulation_main_changing_settings_filepath
-SETTINGS_BASE_FP <- constants$simulation_base_settings_filepath
-N_SAMPLES <- constants$n_samples
-MEAN_MAX_YIELD <- constants$mean_max_yield_in_simulations
+SETTINGS_BASE_FP          <- constants$simulation_base_settings_filepath
+N_SAMPLES                 <- constants$n_samples
+MAX_YIELD_AVG             <- constants$mean_max_yield_in_simulations
+MAX_YIELD_MIN             <- constants$min_max_yield_in_simulations
+MAX_YIELD_MAX             <- constants$max_max_yield_in_simulations
+INF_STARTS_AVG            <- constants$mean_fraction_infected_at_start_in_simulations
+INF_STARTS_MIN            <- constants$min_fraction_infected_at_start_in_simulations
+INF_STARTS_MAX            <- constants$max_fraction_infected_at_start_in_simulations
+ANNUAL_COST               <- constants$annual_cost_in_simulations
+REPLANT_COST              <- constants$replant_cost_in_simulations
+OUTPUT_PRICE              <- constants$output_price_in_simulations
+
 
 gen_settings_and_save_to_csv <- function(main_changing_settings_path=SETTINGS_MAIN_CHANGING_FP, base_settings_path=SETTINGS_BASE_FP){
   set.seed(43)
@@ -38,8 +47,8 @@ gen_settings_and_save_to_csv <- function(main_changing_settings_path=SETTINGS_MA
   
   n_samples <- N_SAMPLES
   other_variables <- list(
-    max_yield = c(18, MEAN_MAX_YIELD, 24),
-    inf_starts = c(round(256*0.01), round(256*0.03), round(256*0.05)) # low 1%, mid 3%, high 5%
+    max_yield = c(MAX_YIELD_MIN, MAX_YIELD_AVG, MAX_YIELD_AVG),
+    inf_starts = c(round(256*INF_STARTS_MIN), round(256*INF_STARTS_AVG), round(256*INF_STARTS_MAX)) # low 1%, mid 3%, high 5%
   )
   
   # create a latin hypercube sample for all parameters
@@ -70,15 +79,15 @@ gen_settings_and_save_to_csv <- function(main_changing_settings_path=SETTINGS_MA
       TH=40,
       t_disease_year = 1,
       t_treatment_year =1,
-      remove_cost_tree=30,
-      replant_cost_tree=45,
+      remove_cost_tree=30,  # Neither of these are actually used
+      replant_cost_tree=45, # Neither of these are actually used
       replant_orchard=TRUE,
       remove_trees=FALSE, 
       replant_trees=FALSE,
-      replant_cost_orchard = 5500,
+      replant_cost_orchard = REPLANT_COST,
       disease_growth_rate = 0.2,
-      annual_cost=5800,
-      output_price=1.1,
+      annual_cost=ANNUAL_COST,
+      output_price=OUTPUT_PRICE,
       input_annual_price_change=0.0,
       output_annual_price_change=0.0
     )
