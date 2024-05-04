@@ -11,5 +11,13 @@
   "simulation_results_filepath": "/data/bfitzgerald/cytospora/simulation_results",
   "n_samples": [100],
   "mean_max_yield_in_simulations": [22.5],
+  "min_max_yield_in_simulations": [18],
+  "max_max_yield_in_simulations": [24],
+  "mean_fraction_infected_at_start_in_simulations": [0.03],
+  "min_fraction_infected_at_start_in_simulations": [0.01],
+  "max_fraction_infected_at_start_in_simulations": [0.05],
+  "annual_cost_in_simulations": [5800],
+  "replant_cost_in_simulations": [5500],
+  "output_price_in_simulations": [1.1],
   "percent_interest": [0.03]
 }

@@ -322,7 +322,7 @@ simulateControlScenarios <- function(year_start,
     rename_with(~str_c("t2_",.),-c(x,y,time))
   
   results <- inner_join(t1, t2, by = c("x", "y", "time")) %>%
-    rename(`Treatment 1`=t1_yield,`Treatment 2`=t2_yield)
+    dplyr::rename(`Treatment 1`=t1_yield,`Treatment 2`=t2_yield)
   
   if (include_nd_and_nt){
       tree_health_max <- tree_sim_with_shared_settings(inf_starts = 0) %>%   #inf_starts=0 implies no infection for Disease Free
@@ -333,7 +333,7 @@ simulateControlScenarios <- function(year_start,
       
       results <- inner_join(tree_health_nt,tree_health_max, by = c("x", "y", "time")) %>%
         inner_join(results, by = c("x", "y", "time")) %>%
-        rename(`Disease Free`=max_yield,`No Treatment`=nt_yield)
+        dplyr::rename(`Disease Free`=max_yield,`No Treatment`=nt_yield)
   }
   results
 }
