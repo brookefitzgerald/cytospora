@@ -1,4 +1,5 @@
 library(future)
+library(jsonlite)
 library(plotly)
 library(promises)
 library(scales)
@@ -12,8 +13,19 @@ library(glue,       include.only = 'glue')
 library(tibbletime, include.only = 'rollify')
 
 source("scripts/gs_connect.R")
+source("scripts/process_simulations1_adjust_npv_from_inputs.R")
+
+conflicts_prefer(dplyr::mutate)
 
 plan(multisession)
+
+constants <- read_json("project_constants.json", simplifyVector = T)
+MAX_YIELD_AVG <- constants$mean_max_yield_in_simulations
+MAX_YIELD_MIN <- constants$min_max_yield_in_simulations
+MAX_YIELD_MAX <- constants$max_max_yield_in_simulations
+ANNUAL_COST   <- constants$annual_cost_in_simulations
+REPLANT_COST  <- constants$replant_cost_in_simulations
+OUTPUT_PRICE  <- constants$output_price_in_simulations
 
 shinyServer(function(input, output, session) {
   #  First input that is also updated by other inputs e.g. sum(annual_cost_{n})
@@ -47,6 +59,12 @@ shinyServer(function(input, output, session) {
   hide_ui("#simulation_parameters")
   hide_ui("#hidden_avgs")
   hide_ui("#reset_simulations_div")
+  hide_ui("#de_treatment_output", duration=0)
+  hide_ui("#de_replant_output", duration=0)
+  hide_ui("#de_prune_output", duration=0)
+  hide_ui("#de_treatment_comparison", duration=0)
+  hide_ui("#change_left_and_right", duration=0)
+  hide_ui("#de_option_buttons", duration=0)
   
   observeEvent(input$simulation_treatments_menu_toggle, {
     jqui_toggle("#treatment_simulation_parameters", effect="blind")
@@ -64,6 +82,366 @@ shinyServer(function(input, output, session) {
       # then show it's contents:
       show_ui("#div_dashboard", duration=0)
   })
+  
+  # De = decision engine
+  
+  de_selects <- reactiveValues(annual_cost=ANNUAL_COST, replant_cost=REPLANT_COST, selected_rev="Baseline: $14,256", selected_replant_year=20, include_replant_year=F)
+  get_de_inputs <- reactive({
+      # Can't update
+      if(de_selects$include_replant_year){
+        input_div <- div(class="de_inputs",
+                         fluidRow(selectInput("new_revenue",       "Average annual revenue from an acre of healthy adult trees",   choices=c("20% Lower: $11,405", "10% Lower: $12,830", "Baseline: $14,256", "10% Higher: $15,682", "20% Higher: $17,107"), selected="Baseline: $14,256")),
+                         fluidRow(numericInput("new_annual_cost",  "Annual orchard management costs (not including CC treatment)", value=de_selects$annual_cost,  min=0, max=100000)),
+                         fluidRow(numericInput("new_replant_cost", "Orchard replanting costs",                                     value=de_selects$replant_cost, min=0, max=100000)),
+                         fluidRow(selectInput("new_replant_year",  "Normal Replant Year",                                          choices=c(14, 16, 18, 20), selected = 20)))
+      } else {
+        input_div <- div(class="de_inputs",
+                         fluidRow(selectInput("new_revenue",       "Average annual revenue from an acre of healthy adult trees",   choices=c("20% Lower: $11,405", "10% Lower: $12,830", "Baseline: $14,256", "10% Higher: $15,682", "20% Higher: $17,107"), selected="Baseline: $14,256")),
+                         fluidRow(numericInput("new_annual_cost",  "Annual orchard management costs (not including CC treatment)", value=de_selects$annual_cost,  min=0, max=100000)),
+                         fluidRow(numericInput("new_replant_cost", "Orchard replanting costs",                                     value=de_selects$replant_cost, min=0, max=100000)))
+      }
+      return(input_div)
+    })
+  
+  observeEvent(input$de_back, {
+    show_ui("#de_question_btns", duration=0)
+    hide_ui("#de_treatment_output", duration=0)
+    hide_ui("#de_replant_output", duration=0)
+    hide_ui("#de_prune_output", duration=0)
+    hide_ui("#de_option_buttons", duration=0)
+  })
+
+  observeEvent(input$de_treatment, {
+    de_selects$include_replant_year <- TRUE
+    showModal(modalDialog(
+      title = "Please Enter Your Orchard's Information",
+      footer = tagList(
+        modalButton("Cancel"),
+        actionButton("de_treatment_continue", "Continue")
+      ),
+      get_de_inputs()
+    )
+    )})
+  observeEvent(input$de_update, {
+    showModal(modalDialog(
+      title = "Please Update Your Orchard's Information",
+      footer = tagList(
+        modalButton("Cancel"),
+        actionButton("any_de_continue", "Continue")
+      ),
+      get_de_inputs()
+    )
+    )})
+  # need to subtract first planting costs
+  npv_adjustment <- reactiveVal(-REPLANT_COST)
+  npv_adjustment2 <- reactiveValues(treatment=-REPLANT_COST, prune=-REPLANT_COST, replant=-REPLANT_COST)
+  
+  update_npv <- function(){
+    new_revenue <- as.numeric(str_remove(str_extract(input$new_revenue, "([0-9]{2},[0-9]{3})"), ','))
+    npv_adjustment(get_npv_adjustment_by_replant_year(replant_year=as.numeric(input$new_replant_year),
+                                                      new_revenue=new_revenue,
+                                                      new_annual_cost=input$new_annual_cost, 
+                                                      new_replant_cost=input$new_replant_cost) - REPLANT_COST)
+    npv_adjustment2$treatment <- get_npv_adjustment_by_replant_year(replant_year=as.numeric(input$new_replant_year),
+                                                                    new_revenue=new_revenue,
+                                                                    new_annual_cost=input$new_annual_cost, 
+                                                                    new_replant_cost=input$new_replant_cost) -REPLANT_COST
+    npv_adjustment2$prune     <- get_npv_adjustment_by_replant_year(replant_year=17,
+                                                                    new_revenue=new_revenue,
+                                                                    new_annual_cost=input$new_annual_cost, 
+                                                                    new_replant_cost=input$new_replant_cost) - REPLANT_COST
+    npv_adjustment2$replant   <- get_npv_adjustments_all_replant_years(new_revenue=new_revenue,
+                                                                       new_annual_cost=input$new_annual_cost, 
+                                                                       new_replant_cost=input$new_replant_cost) - REPLANT_COST
+  }
+  observeEvent(input$any_de_continue, {
+    update_npv()
+    removeModal()
+  })
+  
+  observeEvent(input$de_treatment_continue, {
+    update_npv()
+    hide_ui("#de_question_btns", duration=0)
+    show_ui("#de_treatment_output", duration=0)
+    show_ui("#de_option_buttons", duration=0)
+    removeModal()
+  })
+  # read the csv outside of the function so that we only read the data in once,
+  # and so we can access it from multiple functions.
+  stochastic_dom_agg_dfm <- reactive({
+    round(read_csv(glue("/data/bfitzgerald/cytospora/stoch_dom_results/stochastic_dom_treatment{input$new_replant_year}_agg.csv"), show_col_types = FALSE), 3)
+  })
+  stochastic_dom_dfm <- reactive({
+    read_csv(glue("/data/bfitzgerald/cytospora/stoch_dom_results/stochastic_dom_treatment{input$new_replant_year}_all.csv"), show_col_types = FALSE)
+  })
+  output$de_treatment_plot <- renderPlotly({
+    stoch_dom_agg_dfm <- stochastic_dom_agg_dfm()
+    stoch_dom_agg_dfm <- stoch_dom_agg_dfm %>% 
+      dplyr::mutate(
+        adjusted_npv_mean = npv_mean + npv_adjustment(),
+        `<b>Risk Ranking</b>`=paste('                     ', sprintf("%.0f", fd_stoch_dom_pct*100), 
+                '<br><b>Mean NPV</b>:                 $', format(round(adjusted_npv_mean), big.mark=","), 
+                '<br><b>Treatment Cost</b>:         $ ', format(round(control_cost), big.mark=","),
+                '<br><b>Treatment Effectiveness</b>:  ', control_effort)
+      )
+    #stoch_dom_agg_dfm$adjusted_npv_mean <- stoch_dom_agg_dfm$npv_mean + npv_adjustment()
+    #stoch_dom_agg_dfm$label <- paste('<b>Risk Ranking</b>:           %', sprintf("%.2f", fd_stoch_dom_pct), 
+    #                             '<br><b>Mean NPV</b>:               $', adjusted_npv_mean, 
+    #                             '<br><b>Treatment Cost</b>:          ', control_cost,
+    #                             '<br><b>Treatment Effectiveness</b>: ', control_effort)
+    #stoch_dom_dfm <- stochastic_dom_dfm()
+    plot <- stoch_dom_agg_dfm %>% 
+      ggplot(aes(x=control_cost, y=control_effort, fill=adjusted_npv_mean, key=`<b>Risk Ranking</b>`)) +
+      geom_tile() + 
+      scale_x_continuous("Control Cost", labels = label_dollar()) +
+      scale_y_continuous("Disease Spread Reduction", labels = label_percent()) +
+      scale_fill_viridis_c("Average NPV\nof simulations", labels=label_dollar())+
+      labs(title="Net Present Value of 40 Year Orchard with Cytospora Treatment") +
+      theme_minimal(base_size=16) + 
+      theme(plot.title = element_text(hjust = 0.5))
+    fig <- ggplotly(plot, source='de_treatment_plot', tooltip = c('key')) %>% 
+        plotly::event_register('plotly_hover') %>% 
+        plotly::event_register('plotly_unhover') %>% 
+        plotly::event_register('plotly_click')
+    show_ui("#change_left_and_right", duration=0)
+    fig
+  })
+  geom_text(aes(label = paste('<i>Price</i>: $', sprintf("%.2f", y), '<br><b>X</b>: ', x, '<br><b>', text, '</b>')), 
+            hjust = -0.1, vjust = 0) 
+  
+  click_data <- reactiveValues(left=NULL, right=NULL)
+  treatment_comp_labels <- reactiveValues(main=NULL, left=NULL, right=NULL)
+  
+  update_treatment_comparison <- function(){
+    if (!is.null(click_data$left) & !is.null(click_data$right)){
+      stoch_dom_agg_dfm <- stochastic_dom_agg_dfm()
+      l_and_r <- stoch_dom_agg_dfm %>% 
+        dplyr::mutate(is_left = (control_cost == click_data$left$x) & (control_effort == click_data$left$y),
+               is_right = (control_cost == click_data$right$x) & (control_effort == click_data$right$y)) %>% 
+        dplyr::filter(is_left | is_right) %>% 
+        dplyr::mutate(ordered_side=if_else(is_left, "1. left", "2. right"))
+      stoch_dom_dfm <- stochastic_dom_dfm()
+      l_over_r <- stoch_dom_dfm %>% 
+        dplyr::filter(first  == dplyr::filter(l_and_r, is_left)$id,
+               second == dplyr::filter(l_and_r, is_right)$id) %>% 
+        dplyr::select(ends_with('dom'))
+      r_over_l <- stoch_dom_dfm %>% 
+        dplyr::filter(first  == dplyr::filter(l_and_r, is_right)$id,
+                      second == dplyr::filter(l_and_r, is_left)$id) %>% 
+        dplyr::select(ends_with('dom'))
+      if (l_over_r$fd_stoch_dom){
+        treatment_comp_labels$main <- "Better outcomes are always more likely with treatment 1."
+      } else if (l_over_r$sd_stoch_dom){
+        treatment_comp_labels$main <- "Treatment 1 has lower chance of bad (below average) outcomes than treatment 2."
+      } else if (r_over_l$fd_stoch_dom){
+        treatment_comp_labels$main <- "Better outcomes are always more likely with treatment 2."
+      } else if (r_over_l$sd_stoch_dom){
+        treatment_comp_labels$main <- "Treatment 2 has lower chance of bad (below average) outcomes than treatment 1."
+      } else {
+        treatment_comp_labels$main <- "Treatment 1 and treatment 2 are similarly risky."
+      }
+      results <- l_and_r %>% dplyr::arrange(ordered_side) %>% 
+        dplyr::mutate(npv_min=round(npv_mean - 1.96*npv_sd),
+               npv_max=round(npv_mean + 1.96*npv_sd),
+               npv_ci_string = str_c("$", format(npv_min, big.mark=","), " to $", format(npv_max, big.mark=",")),
+               npv_skewness=round(3*(npv_mean-npv_median)/npv_sd, 2),
+               skew_direction_string=if_else(npv_mean<npv_median, "to the left", "to the right"),
+               npv_skewness_string=case_when(
+                 npv_skewness < .1 ~ "Not very skewed",
+                 npv_skewness < .3 ~ paste("Slightly skewed", skew_direction_string),
+                 npv_skewness < .6 ~ paste("Moderately skewed", skew_direction_string),
+                 TRUE ~ paste("Very skewed", skew_direction_string)
+              )) %>% dplyr::select(npv_skewness_string, npv_ci_string, control_cost, control_effort, npv_mean, npv_median, is_left, is_right)
+      treatment_comp_labels$left <- dplyr::filter(results, is_left) %>% dplyr::select(npv_skewness_string, npv_ci_string) %>% as.list()
+      treatment_comp_labels$right<- dplyr::filter(results, is_right) %>% dplyr::select(npv_skewness_string, npv_ci_string) %>% as.list()
+    }
+  }
+  
+  observeEvent(input$change_left_and_right, {
+    old_left <- click_data$left
+    click_data$left <- click_data$right
+    click_data$right <- old_left
+    if(!is.null(click_data$left) & !is.null(click_data$right)){
+      update_treatment_comparison()
+    }
+  })
+  
+  update_side_with_info <- function(side, info){
+    click_data[[side]] <- list(x=info$x, y=info$y, ix=info$pointNumber[[1]])
+    shinyjs::runjs(glue("Shiny.setInputValue('close_{side}', false);"))
+  }
+  observeEvent(event_data("plotly_click", source = "de_treatment_plot"), {
+    info <- event_data("plotly_click", source = "de_treatment_plot")
+    if      (is.null(click_data$left))  {update_side_with_info("left",  info)}
+    else if (is.null(click_data$right)) {update_side_with_info("right", info)}
+    else                                {update_side_with_info("right", info)}
+    
+    if(!is.null(click_data$left) & !is.null(click_data$right)){
+      update_treatment_comparison()
+      show_ui("#de_treatment_comparison", duration=0)
+    }
+  })
+  
+  make_output_section_ui <- function(side){
+    panel_label <- paste0("Selected Treatment ", if_else(side=="left", 1, 2))
+    renderUI({
+      
+      if (!is.null(click_data[[side]])) {
+        x <- click_data[[side]]$x
+        y <- click_data[[side]]$y
+        indices <- click_data[[side]]$info
+        panel <- wellPanel(
+          tags$span(class = "close", onclick = glue("Shiny.setInputValue('close_{side}', true);"), style = "float:right; cursor:pointer;", "×"),
+          h5(panel_label),
+          p(paste0("Cost: $", x, " Effectiveness: ", y*100, "%")),
+          p(treatment_comp_labels[[side]]$npv_skewness_string),
+          p(paste0("Range of Net Present Value:  ", treatment_comp_labels[[side]]$npv_ci_string))
+        )
+      } else {
+        panel <- wellPanel(
+          id = side,
+          h5(panel_label),
+          p("Click graph to choose treatment.")
+        )
+      }
+      return(panel)
+    })
+  }
+  
+  output$left <- make_output_section_ui("left")
+  output$right <- make_output_section_ui("right")
+  
+  close_side <- function(side){
+    # This gets ran each time click data is changed, not just when it's null, 
+    # so all code should be in the if statement. 
+    
+    if(input[[paste0("close_", side)]]){
+      click_data[[side]] <- NULL
+      treatment_comp_labels$main <- NULL
+      hide_ui("#de_treatment_comparison", duration=0)
+    }
+  }
+  
+  observeEvent(input$close_left, {close_side("left")})
+  observeEvent(input$close_right, {close_side("right")})
+  
+  output$compare_treatments <- renderUI(wellPanel(p(treatment_comp_labels$main)))
+  
+  ### When should I replant question
+  observeEvent(input$de_replant, {
+    de_selects$include_replant_year <- FALSE
+    showModal(modalDialog(
+      title = "Please Enter Your Orchard's Information",
+      footer = tagList(
+        modalButton("Cancel"),
+        actionButton("de_replant_continue", "Continue")
+      ),
+      get_de_inputs()
+    )
+    )})
+  
+  observeEvent(input$de_replant_continue, {
+    hide_ui("#de_question_btns", duration=0)
+    show_ui("#de_replant_output", duration=0)
+    show_ui("#de_option_buttons", duration=0)
+    removeModal()
+  })
+  
+  #stoch_dom_replant_all <- read_csv('/data/bfitzgerald/cytospora/stoch_dom_results/stochastic_dom_replant_year_all.csv', show_col_types = FALSE) %>% 
+  #  dplyr::filter((first == second + 1) | (first == second - 1)) # only comparing years directly after
+  replant_treatment_id <- reactiveVal('')
+  stochastic_dom_replant_agg <- reactive({
+    replant_npv_adj_dfm <- data.frame(npv_adj=coalesce(npv_adjustment2$replant, 0), replant_years=13:20)
+    print(replant_npv_adj_dfm)
+    read_csv(glue('/data/bfitzgerald/cytospora/stoch_dom_results/stochastic_dom_replant_year{replant_treatment_id()}_agg.csv'), show_col_types = FALSE)%>% 
+      dplyr::inner_join(replant_npv_adj_dfm, by='replant_years') %>% 
+    dplyr::mutate(
+      npv_adjusted_mean = npv_mean + npv_adj,
+      lower = npv_adjusted_mean - 1.96*npv_sd,
+      upper = npv_adjusted_mean + 1.96*npv_sd)
+  })
+  output$de_replant_plot <- renderPlotly({
+    stoch_dom_replant_agg <- stochastic_dom_replant_agg() %>% 
+      dplyr::mutate(replant_years = factor(replant_years, levels=20:13))
+    
+    fig <- ggplot(stoch_dom_replant_agg, aes(replant_years, npv_adjusted_mean)) +
+      geom_crossbar(aes(ymin = lower, ymax = upper), fill="white",width = 0.2) + 
+      scale_y_continuous(labels=label_dollar()) +
+      coord_flip() +
+      theme_minimal(base_size=26) +
+      theme(plot.title = element_text(hjust = 0.5)) + 
+      labs(y="NPV Range in Simulations", title="Replant Year", x='')
+    ggplotly(fig) %>% config(displayModeBar = FALSE) %>% plotly::layout(hovermode = "closest", hoverdistance = 400)
+  })
+  
+  observe({
+    active_button_id <- str_c('replant_option_', if_else(replant_treatment_id()=='', '1', replant_treatment_id()))
+    lapply(1:3, \(id) removeCssClass(str_c('replant_option_', id), class="active"))
+    addCssClass(active_button_id, class="active")
+  })
+  
+  observeEvent(input$replant_option_1, {replant_treatment_id('')})
+  observeEvent(input$replant_option_2, {replant_treatment_id('2')})
+  observeEvent(input$replant_option_3, {replant_treatment_id('3')})
+  
+  
+  ### How careful should I be when I'm pruning question
+  observeEvent(input$de_prune, {
+    de_selects$include_replant_year <- FALSE
+    showModal(modalDialog(
+      title = "Please Enter Your Orchard's Information",
+      footer = tagList(
+        modalButton("Cancel"),
+        actionButton("de_prune_continue", "Continue")
+      ),
+      get_de_inputs()
+    )
+    )})
+  
+  observeEvent(input$de_prune_continue, {
+    hide_ui("#de_question_btns", duration=0)
+    show_ui("#de_prune_output", duration=0)
+    show_ui("#de_option_buttons", duration=0)
+    removeModal()
+  })
+  pruning_treatment_id <- reactiveVal('')
+  stochastic_dom_prune_agg <- reactive({
+    
+    read_csv(glue('/data/bfitzgerald/cytospora/stoch_dom_results/stochastic_dom_detection_prob{pruning_treatment_id()}_agg.csv'), show_col_types = FALSE) %>% 
+      dplyr::mutate(
+        npv_adjusted_median = npv_median + npv_adjustment2$prune,
+        npv_adjusted_mean = npv_mean + npv_adjustment2$prune,
+        lower = npv_adjusted_mean - 1.96*npv_sd,
+        upper = npv_adjusted_mean + 1.96*npv_sd)
+    
+  })
+  #stoch_dom_prune_all <- read_csv('/data/bfitzgerald/cytospora/stoch_dom_results/stochastic_dom_detection_prob_all.csv', show_col_types = FALSE) %>% 
+  #  dplyr::filter((first == second + 1) | (first == second - 1)) # only comparing years directly after
+  output$de_prune_plot <- renderPlotly({
+    stoch_dom_prune_agg <- stochastic_dom_prune_agg() %>% 
+      dplyr::mutate(treatable_detection_probability=factor(label_percent(1)(treatable_detection_probability), levels=label_percent(1)(seq(1, 0, -0.01))))
+    fig <- ggplot(stoch_dom_prune_agg, aes(treatable_detection_probability, npv_adjusted_mean)) +
+      geom_crossbar(aes(ymin = lower, ymax = upper), fill="white",width = 0.2) + 
+      geom_point(shape='|', color = "blue", size = 2) + 
+      scale_y_continuous(labels=label_dollar()) +
+      coord_flip() +
+      theme_minimal(base_size=26) +
+      theme(plot.title = element_text(hjust = 0.5)) + 
+      labs(y="NPV Range in Simulations", x="Probability of Detecting\n and Pruning Branch Cankers", title='NPV Range for Canker Detection and Pruning Accuracies')
+      
+    ggplotly(fig) %>% config(displayModeBar = FALSE) %>% plotly::layout(hovermode = "closest", hoverdistance = 400)
+  })
+  
+  observe({
+    active_button_id <- str_c('prune_option_', if_else(pruning_treatment_id()=='', '1', pruning_treatment_id()))
+    lapply(1:3, \(id) removeCssClass(str_c('prune_option_', id), class="active"))
+    addCssClass(active_button_id, class="active")
+  })
+  
+  observeEvent(input$prune_option_1, {pruning_treatment_id('')})
+  observeEvent(input$prune_option_2, {pruning_treatment_id('2')})
+  observeEvent(input$prune_option_3, {pruning_treatment_id('3')})
+  
   
   ##### Dynamically rendering the simulation options ########
   
@@ -256,10 +634,10 @@ shinyServer(function(input, output, session) {
     } else {
       plot(x=vals$x, y=vals$y, xlim=c(rv$start_year, rv$end_year), ylim=c(0, 15000), ylab="Yield (lbs/ac)", xlab="Year", type="l", lwd=3)
       years_to_simulate <- rv$start_year:rv$end_year
-      drawn_dfm <- data.frame(x=vals$x, y=vals$y) %>% mutate(x=round(x)) %>% group_by(x) %>% summarize(y=mean(y))
+      drawn_dfm <- data.frame(x=vals$x, y=vals$y) %>% dplyr::mutate(x=round(x)) %>% group_by(x) %>% dplyr::summarize(y=mean(y))
       interpolated_dfm <- data.frame(x=years_to_simulate) %>%
         left_join(drawn_dfm, by="x") %>% 
-        mutate(y=approx(x, y, x, rule=2)$y)
+        dplyr::mutate(y=approx(x, y, x, rule=2)$y)
       vals$selectedYield <- interpolated_dfm$y
       points(x=interpolated_dfm$x, y=interpolated_dfm$y, pch=19)
     }
@@ -343,9 +721,9 @@ shinyServer(function(input, output, session) {
       #    `No Treatment`=nt_disease,
       #    `Treatment 1`=t1_disease,
       #    `Treatment 2`=t2_disease) %>% 
-      #  select(-max_disease) %>% 
+      #  dplyr::select(-max_disease) %>% 
       #  pivot_longer(-c(x,y,time)) %>% 
-      #  mutate(disease=value/11)
+      #  dplyr::mutate(disease=value/11)
         
         dplyr::select(-ends_with(c("net_returns", "realized_costs", "disease"))) %>%
         dplyr::filter(time==current_year()) %>%
@@ -442,7 +820,7 @@ shinyServer(function(input, output, session) {
       # if hovering, plot the tree's yield over time. If not hovering, plot the
       # table row selected, otherwise render the overall orchard yield.
       selected_row <- input$mytable_rows_selected
-      df <- tree_health_data()$data %>% select(-ends_with(c("tree_age", "disease")))
+      df <- tree_health_data()$data %>% dplyr::select(-ends_with(c("tree_age", "disease")))
       
       if (!is.null(most_recent_x_y_hover())) {
         p <- plot_tree_yield(df, x_coord=most_recent_x_y_hover()[["x"]], y_coord=most_recent_x_y_hover()[["y"]])
@@ -474,16 +852,16 @@ shinyServer(function(input, output, session) {
     output$mytable <- DT::renderDataTable({
       run_data_and_id <- tree_health_data()
       tree_health_aggregated_orchard_cost_yield_and_returns <- run_data_and_id$data %>%
-        select(-ends_with(c("tree_age", "disease"))) %>%
+        dplyr::select(-ends_with(c("tree_age", "disease"))) %>%
         group_by(time) %>%
-        summarize(across(-c(x,y),~sum(.,na.rm = T))) %>%
+        dplyr::summarize(across(-c(x,y),~sum(.,na.rm = T))) %>%
         ungroup()
 
       first_six_years_max_net_returns <- (
         tree_health_aggregated_orchard_cost_yield_and_returns %>%
-        select(time, max_net_returns) %>% 
-        filter(time <= rv$start_year + TREE_FIRST_FULL_YIELD_YEAR) %>% 
-        summarize(value=sum(max_net_returns))
+        dplyr::select(time, max_net_returns) %>% 
+        dplyr::filter(time <= rv$start_year + TREE_FIRST_FULL_YIELD_YEAR) %>% 
+        dplyr::summarize(value=sum(max_net_returns))
       )$value
       sum_roll_6 <- rollify(sum, window = 6)
       
@@ -492,49 +870,49 @@ shinyServer(function(input, output, session) {
         #Col 1: yield
         data.frame(`Yield (avg/ac/yr)`=
           tree_health_aggregated_orchard_cost_yield_and_returns %>%
-          summarize(across(-c(time),~mean(.,na.rm = T))) %>%
-          select(`Disease Free`,`No Treatment`,`Treatment 1`,`Treatment 2`) %>%
+          dplyr::summarize(across(-c(time),~mean(.,na.rm = T))) %>%
+          dplyr::select(`Disease Free`,`No Treatment`,`Treatment 1`,`Treatment 2`) %>%
           t(), check.names=FALSE),
         #Col 2: net returns
         data.frame(`Net Returns (avg/ac/yr)`=
           tree_health_aggregated_orchard_cost_yield_and_returns %>%
-          summarize(across(-c(time),~mean(.,na.rm = T))) %>%
-          select(`Disease Free`=max_net_returns,`No Treatment`=nt_net_returns,`Treatment 1`=t1_net_returns,`Treatment 2`=t2_net_returns) %>%
+          dplyr::summarize(across(-c(time),~mean(.,na.rm = T))) %>%
+          dplyr::select(`Disease Free`=max_net_returns,`No Treatment`=nt_net_returns,`Treatment 1`=t1_net_returns,`Treatment 2`=t2_net_returns) %>%
           t(), check.names=FALSE),
         #Row 3: benefit of treatment
         data.frame(`Treatment Returns (avg/ac/yr)`=
           tree_health_aggregated_orchard_cost_yield_and_returns %>%
-          summarize(across(-c(time),~sum(.,na.rm = T)), n_years=n()) %>%
-          mutate(t1_net_returns=(t1_net_returns - nt_net_returns)/n_years,
+          dplyr::summarize(across(-c(time),~sum(.,na.rm = T)), n_years=n()) %>%
+          dplyr::mutate(t1_net_returns=(t1_net_returns - nt_net_returns)/n_years,
                  t2_net_returns=(t2_net_returns - nt_net_returns)/n_years) %>%
-          mutate(`Disease Free`=NA,`No Treatment`=NA,`Treatment 1`=t1_net_returns,`Treatment 2`=t2_net_returns, .keep="none") %>%
+          dplyr::mutate(`Disease Free`=NA,`No Treatment`=NA,`Treatment 1`=t1_net_returns,`Treatment 2`=t2_net_returns, .keep="none") %>%
           t(), check.names = FALSE),
         #Col 4: net present value of returns at selected year
         data.frame(`Net Present Value From Current Year ($/ac)`=
           tree_health_aggregated_orchard_cost_yield_and_returns %>%
-          select(c(time, ends_with("net_returns"))) %>%
-          filter(time >= current_year()) %>%
+          dplyr::select(c(time, ends_with("net_returns"))) %>%
+          dplyr::filter(time >= current_year()) %>%
           # With a user-specified discount rate
-          mutate(npv_multiplier=1/((1+input$percent_interest/100.0)**(time - current_year())),
+          dplyr::mutate(npv_multiplier=1/((1+input$percent_interest/100.0)**(time - current_year())),
                  across(ends_with("net_returns"), ~(.*npv_multiplier), .names = "{.col}")) %>% 
-          summarise(across(ends_with("net_returns"), ~sum(.))) %>%
-          mutate(`Disease Free`=NA,`No Treatment`=nt_net_returns,`Treatment 1`=t1_net_returns,`Treatment 2`=t2_net_returns, .keep="none") %>%
+          dplyr::summarise(across(ends_with("net_returns"), ~sum(.))) %>%
+          dplyr::mutate(`Disease Free`=NA,`No Treatment`=nt_net_returns,`Treatment 1`=t1_net_returns,`Treatment 2`=t2_net_returns, .keep="none") %>%
           t(), check.names = FALSE),
         #Col 5: operating duration
         data.frame(`Optimal First Replanting Year`=
           tree_health_aggregated_orchard_cost_yield_and_returns %>%
-          filter((time > (rv$start_year + TREE_FIRST_FULL_YIELD_YEAR)) & (time < (rv$start_year + get_planting_years()[1]))) %>%
+          dplyr::filter((time > (rv$start_year + TREE_FIRST_FULL_YIELD_YEAR)) & (time < (rv$start_year + get_planting_years()[1]))) %>%
           # orders descending order so that the function cumsum sums starting from the end of the life of the orchard
-          arrange(desc(time)) %>%
-          mutate(across(ends_with("net_returns"), ~coalesce(sum_roll_6(.), cumsum(.)), .names = "{.col}_cum")) %>%
+          dplyr::arrange(desc(time)) %>%
+          dplyr::mutate(across(ends_with("net_returns"), ~coalesce(sum_roll_6(.), cumsum(.)), .names = "{.col}_cum")) %>%
           # chooses the first time the expected profit from the net returns is outweighed by the replanted yield
           # The plus one is to ensure that the year matches the year replanted (indexing problem)
-          summarise(`Disease Free`= first(time[max_net_returns_cum >= first_six_years_max_net_returns]) + 1,
+          dplyr::summarise(`Disease Free`= first(time[max_net_returns_cum >= first_six_years_max_net_returns]) + 1,
                     `No Treatment`= first(time[nt_net_returns_cum  >= first_six_years_max_net_returns]) + 1,
                     `Treatment 1` = first(time[t1_net_returns_cum  >= first_six_years_max_net_returns]) + 1,
                     `Treatment 2` = first(time[t2_net_returns_cum  >= first_six_years_max_net_returns]) + 1) %>%
           # TODO: decide if it makes sense or not to have the optimal replanting year when not replanting the entire orchard
-          # mutate(across(everything(), ~ifelse(input$replanting_strategy %in% c('tree_replant'), "", .))) %>%
+          # dplyr::mutate(across(everything(), ~ifelse(input$replanting_strategy %in% c('tree_replant'), "", .))) %>%
           t(), check.names = FALSE)
       )
       
@@ -544,14 +922,14 @@ shinyServer(function(input, output, session) {
           add_data_to_data_store(
             output_data %>%
               rownames_to_column("Treatment Condition") %>% 
-              mutate(ts=Sys.time(), run_id=run_data_and_id$id, .before=1),
+              dplyr::mutate(ts=Sys.time(), run_id=run_data_and_id$id, .before=1),
             'results')
         })
       }
       
       # takes the data per treatment simulation and formats it into strings for the data table
       formatted_output_data <- output_data %>%
-        mutate(
+        dplyr::mutate(
           `Yield (avg/ac/yr)`             = comma(`Yield (avg/ac/yr)`, accuracy=1),
           `Optimal First Replanting Year` = as.character(`Optimal First Replanting Year`),
           #`Internal Rate of Return`       = percent(`Internal Rate of Return`, accuracy=1),

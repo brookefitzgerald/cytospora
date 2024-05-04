@@ -4,6 +4,8 @@ library(shiny)
 library(shinyjs)
 library(shinyWidgets)
 
+
+
 infoHoverLabel<- function(label, info_text=NA, link=NA){
   info_text <- ifelse(is.na(info_text), label, info_text)
   link_part_one <- ifelse(is.na(link), '', paste0("<a href='", link, "' target='_blank'>"))
@@ -379,66 +381,49 @@ treatment_simulation_parameters <- tags$div(
   all_other_settings
 )
 
-compare_simulations_panel <- fluidPage(
-    fluidRow(
-      column(8, tags$h1("Compare Simulations By Outcome:"))
-    ),
-    fluidRow(
-      img(id="loading_spinner", src="images/loading_spinner_200px.gif", class="center"),
-      plotOutput("simulation_outcome_plot", height="350px"),
-      tags$div(
-        id="reset_simulations_div",
-        actionButton("reset_simulations",           "Try Other Simulation", inline=TRUE),
-        downloadButton("download_simulation_results", "Download Simulation Results", inline=TRUE),
-        class="center-container"
-      ),
-      tags$div(
-        id="compare_treatments",
-        fluidRow(
-          column(
-            6, 
-            tags$h2("Treatment 1", style="text-align: center;"),
-            tags$p("Cheaper, but less effective"),
-            tags$i(tags$p("(i.e. fungicide)", class="desc"))
-          ),column(
-            6, 
-            tags$h2("Treatment 2", style="text-align: center;"),
-            tags$p("More effective, but more expensive"),
-            tags$i(tags$p("(i.e. labor intensive pruning and painting with latex/captan mixture)", class="desc"))
-          )
-        ),
-        fluidRow(
-          tags$div(
-            actionButton("simulate_treatment_diffs", label="Compare Treatment Differences", class=c("btn-primary", "sims", "first")),
-            dropdownButton(
-              treatment_simulation_parameters,
-              inputId="treatment_simulation_parameters_dropdown",
-              circle=FALSE,
-              status="sims second btn-primary",
-              icon=icon("sliders"),
-              inline=TRUE,
-              margin="0px",
-              width="600px",
-              right=TRUE
-            ),
-            class="center-container"
-          ),
-        )
-      ),
-          #actionButton("run_all_simulations", "Run Many Simulations", class="btn-primary btn-md center"),
-          tags$div(
-            id="hidden_avgs",
-            numericInput(inputId="disease_random_share_of_spread_range_avg", label="", value=0.25),
-            numericInput(inputId="inf_intro_range_avg",                      label="", value=11),
-            numericInput(inputId="disease_growth_rate_range_avg",            label="", value=0.175),
-            numericInput(inputId="treatment_1_effectiveness_range_avg",      label="", value=0.25),
-            numericInput(inputId="treatment_2_effectiveness_range_avg",      label="", value=0.45),
-            numericInput(inputId="treatment_1_cost_range_avg",               label="", value=300),
-            numericInput(inputId="treatment_2_cost_range_avg",               label="", value=600),
-            numericInput(inputId="annual_cost_range_avg",                    label="", value=6500),
-          )
-        )
-      )
+
+simulations_caveat_text <- "This is the result of thousands of simulations, calibrated to your inputs. For more information on how the simulations were generated, check out the User Guide in the rightmost tab above."
+
+decision_engine_panel <- fluidPage(
+  fluidRow(column(10, titlePanel("Cytospora Decision Engine")), 
+           column(2, div(id="de_option_buttons",
+                     circleButton("de_update", size="sm", style="margin-top: 20px;", icon=icon("gear"),       tooltip=tooltipOptions(title="Update simulation settings")), 
+                     circleButton("de_back",   size="sm", style="margin-top: 20px;", icon=icon("arrow-left"), tooltip=tooltipOptions(title="Go back to question options"))))),
+  div(
+    id="de_question_btns",
+    fluidRow(actionButton("de_treatment", "How much should I pay for treatment?",                class='bttn-jelly bttn-lg bttn-default', style="color: #21908CFF; border: none;", width="100%")),
+    fluidRow(actionButton("de_replant",   "When should I replant?",                              class='bttn-jelly bttn-lg bttn-default', style="color: #21908CFF; border: none;", width="100%")),
+    fluidRow(actionButton("de_prune",     "How much do I lose if I don't prune branch cankers?", class='bttn-jelly bttn-lg bttn-default', style="color: #21908CFF; border: none;", width="100%"))
+  ),
+  div(
+    id="de_treatment_output",
+    fluidRow(column(10,  simulations_caveat_text)),
+    fluidRow(plotlyOutput("de_treatment_plot", height="500px")),
+    fluidRow(column(5, offset=1, uiOutput("left")),
+             column(1, actionButton("change_left_and_right", "", icon=icon("arrow-right-arrow-left"), style = "margin-top: 50px; margin-left: 15%;", width="70%")),
+             column(5, uiOutput("right"))),
+    div(id="de_treatment_comparison", fluidRow(column(3),column(6, uiOutput("compare_treatments"))))
+  ),
+  actionBttn("hidden", class="hidden"),
+  
+  div(
+    id="de_replant_output",  
+    fluidRow(column(10,  simulations_caveat_text)),
+    fluidRow(div(style="padding-top: 20px, padding-bottom: 20px",
+                 column(4,  actionButton(inputId="replant_option_1", label="All Treatments", width="100%")),
+                 column(4,  actionButton(inputId="replant_option_2", label="$500 Treatment Cost, 50% Effective", width="100%")),
+                 column(4,  actionButton(inputId="replant_option_3", label="$1200 Treatment Cost, 80% Effective", width="100%")))),
+    fluidRow(plotlyOutput("de_replant_plot", height="700px"))
+  ),
+  div(
+    id="de_prune_output", 
+    fluidRow(column(10, simulations_caveat_text)),
+    fluidRow(div(style="margin-top: 20px, margin-bottom: 20px",
+        column(4,  actionButton(inputId="prune_option_1", label="All Treatments", width="100%")),
+        column(4,  actionButton(inputId="prune_option_2", label="$500 Treatment Cost, 50% Effective", width="100%")),
+        column(4,  actionButton(inputId="prune_option_3", label="$1200 Treatment Cost, 80% Effective", width="100%")))),
+    fluidRow(plotlyOutput("de_prune_plot", height="700px")))
+)
 
 tutorial_panel <- img(id="coming_soon", src="images/coming_soon.png", class="center", height="500px")
 
@@ -452,9 +437,9 @@ ui <- tabsetPanel(
       tabsetPanel(
         id="main_tabs",
         type="tabs",
-        tabPanel("Main",                main_dashboard_panel,      id="main"),
-        tabPanel("Compare Simulations", compare_simulations_panel, id="sims"),
-        tabPanel("Tutorial",            tutorial_panel,            id="tutorial")
+        tabPanel("Decision Engine",     decision_engine_panel, id="decision"),
+        tabPanel("Simulation Explorer", main_dashboard_panel,  id="main"),
+        tabPanel("User Guide",          tutorial_panel,        id="tutorial")
       )
     )
 )

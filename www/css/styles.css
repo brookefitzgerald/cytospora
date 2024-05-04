@@ -46,6 +46,20 @@ p.desc {
   width: auto;
 }
 
+.de_inputs {
+  margin-left: 25%;
+  margin-right: auto; /* Remove the margin from the last button to make them touch */
+  width: auto;
+}
+
+.button#compare_treatments {
+  color: #21908CFF; 
+}
+
+.btn#compare_treatments {
+  color: #21908CFF; 
+}
+
 .btn#go_to_app {
   display: block;
   margin-top: 10px;
