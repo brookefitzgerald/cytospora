@@ -841,12 +841,13 @@ shinyServer(function(input, output, session) {
         p <- plot_orchard_yield(df)
       }
       
-      # Plot selected graph
-      return(p + 
-        plot_line_at_current_year(current_year())) %>%
-        ggplotly()  %>%
-        plotly::layout(legend = list(orientation = 'h', y=-0.5, fontsize=12)) #Need to split legend over two rows)
+      p <- p + 
+        plot_line_at_current_year(current_year())
       
+      # Plot selected graph
+      ggplotly(p, tooltip = c('label')) %>%
+        plotly::layout(legend = list(orientation = 'h', y=-0.5, fontsize=12), hoverlabel = list(align = "left")) %>% 
+        plotly::config(displayModeBar = F)
     })
     
     output$mytable <- DT::renderDataTable({
