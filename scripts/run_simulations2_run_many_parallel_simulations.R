@@ -27,7 +27,7 @@ PERCENT_INTEREST <- 0.03
 # This code will run the orchard simulation with the settings. It is supposed to be ran in parallel and in chunks.
 
 cores <- detectCores()
-cl <- makeCluster(cores-1) # for big server
+cl <- makeCluster(10) # for big server
 clusterEvalQ(cl, {
   
   source("global.R", local = TRUE, chdir = TRUE, keep.source = FALSE, encoding = "utf-8")
@@ -40,14 +40,14 @@ clusterEvalQ(cl, {
   base_settings <- read_csv(SETTINGS_BASE_FP) %>% mutate(row_num=row_number())
   ## takes max_yield_{#} columns and turns them into a list which is one column
   max_yields <- base_settings %>% 
-    select(c(row_num, starts_with("max_yield"))) %>% 
-    gather(key="key", value="value", starts_with("max_yield")) %>% 
-    group_by(row_num) %>% 
-    summarize(max_yield = list(value))
+    dplyr::select(c(row_num, starts_with("max_yield"))) %>% 
+    tidyr::gather(key="key", value="value", starts_with("max_yield")) %>% 
+    dplyr::group_by(row_num) %>% 
+    dplyr::summarize(max_yield = list(value))
   base_settings <- base_settings %>% 
-    select(-starts_with("max_yield")) %>% 
-    inner_join(max_yields) %>% 
-    select(-row_num)
+    dplyr::select(-starts_with("max_yield")) %>% 
+    dplyr::inner_join(max_yields) %>% 
+    dplyr::select(-row_num)
   PERCENT_INTEREST <- 0.03
   
   parse_ids <- function(i){
@@ -133,6 +133,12 @@ runAllSettingsInChunks <- function(STARTING_CHUNK=1, ENDING_CHUNK=MAX_CHUNK){
 ## A chunk of simulations
 # runAllSettingsInChunks(ENDING_CHUNK = 1, STARTING_CHUNK=1)
 
+print(system.time({
+  results_list <- parallel::parLapply(cl,
+                                      1:N_SIMULATIONS,
+                                      run_single_simulation)
+}))
+df <- tibble(npv=unlist(results_list), id=1:N_SIMULATIONS)
 
 
 stopCluster(cl)

@@ -4,13 +4,12 @@
 # Replanting year from year 13-20
 # 100 simulations
 
+require(jsonlite, include.only="read_json")
 require(mc2d, include.only = "qpert")
 require(lhs, include.only="randomLHS")
 require(data.table, include.only="CJ")
 library(tidyverse)
 library(stringr)
-
-library(GGally) 
 
 constants <- read_json("project_constants.json", simplifyVector = T)
 SETTINGS_MAIN_CHANGING_FP <- constants$simulation_main_changing_settings_filepath
@@ -32,9 +31,17 @@ gen_settings_and_save_to_csv <- function(main_changing_settings_path=SETTINGS_MA
   systematic_variables <- list(
     treatable_detection_probability = seq(0.0,1, 0.1),
     control_effort = seq(0,1, 0.05), # treatment_spread_reduction
-    control_cost=seq(100, 2000, 100),
+    control_cost= seq(0, 2000, 100),
     replanting_year = 13:20
   )
+  if(no_treatment_simulation){
+    systematic_variables <- list(
+      treatable_detection_probability = seq(0.0,1, 0.1),
+      control_effort =0, # treatment_spread_reduction
+      control_cost=0, 
+      replanting_year = c(14, 16, 18, 20)
+    )
+  }
   
   systematic_var_set <- CJ(
     treatable_detection_probability=unlist(systematic_variables["treatable_detection_probability"]),
@@ -42,8 +49,6 @@ gen_settings_and_save_to_csv <- function(main_changing_settings_path=SETTINGS_MA
     control_cost=unlist(systematic_variables["control_cost"]),
     replant_years=unlist(systematic_variables["replanting_year"]),
     sorted=FALSE)
-  
-  write_csv(systematic_var_set, main_changing_settings_path)
   
   n_samples <- N_SAMPLES
   other_variables <- list(
@@ -67,10 +72,6 @@ gen_settings_and_save_to_csv <- function(main_changing_settings_path=SETTINGS_MA
     )
     i <- i+1
   }
-  #Scatter_Matrix <- ggpairs(sampled_settings,columns = 1:12, 
-  #                          title = "Scatter Plot Matrix", 
-  #                          axisLabels = "show") 
-  #Scatter_Matrix
   
   sampled_settings_full <- sampled_settings  %>%
     mutate(
@@ -91,8 +92,7 @@ gen_settings_and_save_to_csv <- function(main_changing_settings_path=SETTINGS_MA
       input_annual_price_change=0.0,
       output_annual_price_change=0.0
     )
-  
-  
+
   write_csv(sampled_settings_full, base_settings_path)
 }
 full_sampled_settings <- gen_settings_and_save_to_csv()
