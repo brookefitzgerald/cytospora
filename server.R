@@ -91,7 +91,7 @@ shinyServer(function(input, output, session) {
       # Can't update
       if(de_selects$include_replant_year){
         input_div <- div(class="de_inputs",
-                         fluidRow(selectInput("new_revenue",       "Average annual revenue from an acre of healthy adult trees",   choices=c("20% Lower: $11,405", "10% Lower: $12,830", "Baseline: $14,256", "10% Higher: $15,682", "20% Higher: $17,107"), selected="Baseline: $14,256")),
+                         fluidRow(selectInput("new_revenue",       "Maximum annual revenue from an acre of healthy adult trees",   choices=c("20% Lower: $11,405", "10% Lower: $12,830", "Baseline: $14,256", "10% Higher: $15,682", "20% Higher: $17,107"), selected="Baseline: $14,256")),
                          fluidRow(numericInput("new_annual_cost",  "Annual orchard management costs (not including CC treatment)", value=de_selects$annual_cost,  min=0, max=100000)),
                          fluidRow(numericInput("new_replant_cost", "Orchard replanting costs",                                     value=de_selects$replant_cost, min=0, max=100000)),
                          fluidRow(selectInput("new_replant_year",  "Normal Replant Year",                                          choices=c(14, 16, 18, 20), selected = 20)))
@@ -140,17 +140,18 @@ shinyServer(function(input, output, session) {
     new_revenue <- as.numeric(str_remove(str_extract(input$new_revenue, "([0-9]{2},[0-9]{3})"), ','))
 
     npv_adjustment$treatment <- get_npv_adjustment_by_replant_year(replant_year=as.numeric(input$new_replant_year),
-                                                                    new_revenue=new_revenue,
-                                                                    new_annual_cost=input$new_annual_cost, 
-                                                                    new_replant_cost=input$new_replant_cost) -REPLANT_COST
+                                                                   new_revenue=new_revenue,
+                                                                   new_annual_cost=input$new_annual_cost, 
+                                                                   new_replant_cost=input$new_replant_cost) -REPLANT_COST
     npv_adjustment$prune     <- get_npv_adjustment_by_replant_year(replant_year=17,
-                                                                    new_revenue=new_revenue,
-                                                                    new_annual_cost=input$new_annual_cost, 
-                                                                    new_replant_cost=input$new_replant_cost) - REPLANT_COST
+                                                                   new_revenue=new_revenue,
+                                                                   new_annual_cost=input$new_annual_cost, 
+                                                                   new_replant_cost=input$new_replant_cost) - REPLANT_COST
     npv_adjustment$replant   <- get_npv_adjustments_all_replant_years(new_revenue=new_revenue,
-                                                                       new_annual_cost=input$new_annual_cost, 
-                                                                       new_replant_cost=input$new_replant_cost) - REPLANT_COST
+                                                                     new_annual_cost=input$new_annual_cost, 
+                                                                     new_replant_cost=input$new_replant_cost) - REPLANT_COST
   }
+  
   observeEvent(input$any_de_continue, {
     update_npv()
     removeModal()
@@ -797,6 +798,8 @@ shinyServer(function(input, output, session) {
       }
     })
     
+    clicked_plot <- reactiveVal()
+    
     output$tree_health <- renderPlotly({
       # if hovering, plot the tree's yield over time. If not hovering, plot the
       # table row selected, otherwise render the overall orchard yield.
@@ -808,16 +811,22 @@ shinyServer(function(input, output, session) {
         
       } else if (is.null(selected_row)) {
         p <- plot_orchard_yield(df)
+        clicked_plot(p)
         
       } else if (selected_row == 2){
         p <- plot_net_returns(df)
+        clicked_plot(p)
         
       }  else if (selected_row == 3){
         p <- plot_returns_to_treatment(df)
+        clicked_plot(p)
         
       }  else if (selected_row == 4) {
         p <- plot_npv(df, r=input$percent_interest/100., t0=rv$start_year)
+        clicked_plot(p)
           
+      } else if (selected_row == 5) {
+        p <- isolate(clicked_plot())
       } else {
         p <- plot_orchard_yield(df)
       }

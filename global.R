@@ -450,7 +450,7 @@ plot_net_returns <- function(df) {
       dplyr::rename(`Disease Free`=max_net_returns,`No Treatment`=nt_net_returns,`Treatment 1`=t1_net_returns,`Treatment 2`=t2_net_returns) %>%
       tidyr::pivot_longer(c(-time)) %>% 
       dplyr::mutate(tooltip_str=paste0('             ', time,
-                                       '<br><b>Net Returns</b>: $', format(round(value*1000), big.mark=","),
+                                       '<br><b>Net Returns</b>: $', format(round(value), big.mark=","),
                                        '<br><b>Category</b>:       ', name)) %>%
       base_plot(ylab="Net returns ($)", title="Net Returns Over Time")
   )
@@ -519,7 +519,7 @@ plot_tree_yield <- function(df, x_coord, y_coord){
       dplyr::summarize(across(-c(x,y),~sum(.,na.rm = T))) %>%
       tidyr::pivot_longer(c(-time)) %>% 
       dplyr::mutate(tooltip_str=paste0('          ', time,
-                                       '<br><b>Yield (lbs)</b>: ', format(round(value*1000), big.mark=","),
+                                       '<br><b>Yield (lbs)</b>: ', format(round(value), big.mark=","),
                                        '<br><b>Category</b>:    ', name)) %>% 
       base_plot(ylab="Yield (lbs/tree)",title="Tree Yield Over Time")
   )
