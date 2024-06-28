@@ -34,18 +34,24 @@ landing_page_panel <-
       fluidRow(
         column(
           width=6,
-          img(id="logo", src="images/logo.png", class= "center", height="250px")
+          img(id="logo", src="images/logo.png", class= "center", height="275px")
         ),
         column(
           width=6,
           tags$p("Welcome to CSU's Disease Decision Support Tool. This tool is meant
                to aid peach farmers understand the economic impact of the cytospora 
-               disease and control strategies.", class="centertext"),
+               disease and control strategies.", class=c("centertext", 'welcome-text')),
         )
       ),
       tags$div(
         class="center",
         actionButton("go_to_app", "Go to app")
+      ),
+      fluidRow(
+        p("Funding and support provided by:", class='funding-support-text')
+      ),
+      fluidRow(
+        img(id="funding_logos", src="images/funding_logos_lightened.png", class = "responsive-img", height="250px")
       )
     )
 
@@ -385,7 +391,7 @@ treatment_simulation_parameters <- tags$div(
 simulations_caveat_text <- "This is the result of thousands of simulations, calibrated to your inputs. For more information on how the simulations were generated, check out the User Guide in the rightmost tab above."
 
 decision_engine_panel <- fluidPage(
-  fluidRow(column(10, titlePanel("Cytospora Decision Engine")), 
+  fluidRow(column(10, titlePanel("Cytospora Risk Explorer")), 
            column(2, div(id="de_option_buttons",
                      circleButton("de_update", size="sm", style="margin-top: 20px;", icon=icon("gear"),       tooltip=tooltipOptions(title="Update simulation settings")), 
                      circleButton("de_back",   size="sm", style="margin-top: 20px;", icon=icon("arrow-left"), tooltip=tooltipOptions(title="Go back to question options"))))),
@@ -437,7 +443,7 @@ ui <- tabsetPanel(
       tabsetPanel(
         id="main_tabs",
         type="tabs",
-        tabPanel("Decision Engine",     decision_engine_panel, id="decision"),
+        tabPanel("Risk Explorer",       decision_engine_panel, id="decision"),
         tabPanel("Simulation Explorer", main_dashboard_panel,  id="main"),
         tabPanel("User Guide",          tutorial_panel,        id="tutorial")
       )
