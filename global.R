@@ -528,7 +528,7 @@ plot_tree_yield <- function(df, x_coord, y_coord){
 base_treatment_comparison_plot <- function(df, ylabel="", label_function=label_dollar()){
   ggplot(df, aes(x=Treatment, fill=Treatment, y=avg, ymin=lower, ymax=upper)) +
     geom_bar(stat="identity") +
-    geom_errorbar(width = 0.5, size=1) +
+    geom_errorbar(width = 0.5, linewidth=1) +
     scale_y_continuous(labels=label_function) +
     labs(y=ylabel) +
     theme_minimal(base_size = 15)

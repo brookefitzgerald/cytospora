@@ -736,7 +736,7 @@ shinyServer(function(input, output, session) {
           add_row(x=-2, y=1, yield=0, name='Treatment 2') %>%
           add_row(x=-1, y=1, yield=1, name='Treatment 2') %>%
           ggplot(aes(x=x,y=y,fill=yield)) +
-          geom_tile(size=.1,show.legend = F) +
+          geom_tile(linewidth=.1,show.legend = F) +
           scale_fill_gradient(name="Tree Health",low = "red", high = "green", limits=c(0,1)) +
           scale_x_continuous(name = "Column") +
           scale_y_continuous(name = "Row") +
