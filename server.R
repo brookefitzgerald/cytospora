@@ -1,7 +1,6 @@
 library(future)
 library(jsonlite)
 library(plotly)
-library(promises)
 library(scales)
 library(shiny)
 library(shinyjs)
@@ -13,7 +12,6 @@ library(conflicted)
 library(glue,       include.only = 'glue')
 library(tibbletime, include.only = 'rollify')
 
-source("scripts/gs_connect.R")
 source("scripts/process_simulations1_adjust_npv_from_inputs.R")
 
 conflicts_prefer(dplyr::mutate)
@@ -651,13 +649,7 @@ shinyServer(function(input, output, session) {
   current_year <- reactive(input$year)
   output_price <- reactive(input$output_price)
   
-  last_t <- Sys.time()
-  check_enough_time_has_passed_since_last_run <- function(current_time=Sys.time(), 
-                                                          last_time=last_t){
-    tdiff <- difftime(current_time, last_time, units="secs")
-    tdiff <- as.numeric(tdiff, units="secs")
-    return(tdiff > 5)
-  }
+  seed <- reactiveVal(24)
   
   tree_health_data <- reactive({
     input$run_simulation
@@ -668,52 +660,42 @@ shinyServer(function(input, output, session) {
       per_year_per_tree_max_yield <- isolate(input_yield_values())
     }
     simulation_inputs <- isolate(list(
-      random_seed=24,
-      include_nd_and_nt=TRUE,
-      year_start = rv$start_year,
-      year_end = rv$end_year + 1,
-      t_disease_year = t_disease_year(),
-      t_treatment_year = t_treatment_year(),
-      disease_random_share_of_spread=input$disease_random_share_of_spread/100, # function expects a percentage (fraction)
-      disease_spread_rate = input$disease_spread_rate/100,
-      disease_growth_rate = input$disease_growth_rate/100,
-      max_yield = per_year_per_tree_max_yield,
-      output_price = output_price(),
-      annual_cost = input$annual_cost,
-      replanting_strategy = input$replanting_strategy,
-      replant_years = get_planting_years(),
-      remove_cost_tree = input$remove_cost_tree,
-      replant_cost_tree = input$replant_cost_tree,
-      replant_cost_orchard = input$replant_cost_orchard,
-      replant_tree_block_size=as.numeric(input$replant_tree_block_size),
-      remove_tree_block_size=0, # TODO: decide if this should also be removed in blocks
-      inf_intro = input$inf_intro,
-      control1 = input$control1/100,
-      t1_cost = input$t1_cost,
-      control2 = input$control2/100,
-      t2_cost = input$t2_cost,
-      input_annual_price_change=input$percent_cost_change/100,
-      output_annual_price_change=input$percent_price_change/100,
-      treatable_detection_probability=input$detection_prob
-    ))
-    simulation_results <- do.call(simulateControlScenarios, simulation_inputs)
-    run_id <- rlang::hash(simulation_inputs)
-    ## Setup logging for simulation settings_changes
-    try({
-      if(check_enough_time_has_passed_since_last_run()){
-        # replant_years and max_yield are vectors, causing a problem
-        simulation_inputs$replant_years <- paste(simulation_inputs$replant_years, collapse=',')
-        simulation_inputs$max_yield <- paste(simulation_inputs$max_yield, collapse=',')
-        future_promise({
-          add_data_to_data_store(cbind(ts=Sys.time(), run_id=run_id, data.frame(simulation_inputs)))
-        })
-      }
+        random_seed=seed(), # note that the simulation was first ran with random seed 
+        include_nd_and_nt=TRUE,
+        year_start = rv$start_year,
+        year_end = rv$end_year + 1,
+        t_disease_year = t_disease_year(),
+        t_treatment_year = t_treatment_year(),
+        disease_random_share_of_spread=input$disease_random_share_of_spread/100, # function expects a percentage (fraction)
+        disease_spread_rate = input$disease_spread_rate/100,
+        disease_growth_rate = input$disease_growth_rate/100,
+        max_yield = per_year_per_tree_max_yield,
+        output_price = output_price(),
+        annual_cost = input$annual_cost,
+        replanting_strategy = input$replanting_strategy,
+        replant_years = get_planting_years(),
+        remove_cost_tree = input$remove_cost_tree,
+        replant_cost_tree = input$replant_cost_tree,
+        replant_cost_orchard = input$replant_cost_orchard,
+        replant_tree_block_size=as.numeric(input$replant_tree_block_size),
+        remove_tree_block_size=0, # TODO: decide if this should also be removed in blocks
+        inf_intro = input$inf_intro,
+        control1 = input$control1/100,
+        t1_cost = input$t1_cost,
+        control2 = input$control2/100,
+        t2_cost = input$t2_cost,
+        input_annual_price_change=input$percent_cost_change/100,
+        output_annual_price_change=input$percent_price_change/100,
+        treatable_detection_probability=input$detection_prob
+      ))
+      simulation_results <- do.call(simulateControlScenarios, simulation_inputs)
+      seed(NULL)  # keeps the seed 24 for the first simulation, otherwise makes it null
+      return(simulation_results)
     })
-    return(list(data=simulation_results, id=run_id))})
   
     output$orchard_health <- renderPlotly({
       #Raster blocks with color indicating disease spread
-      data2 <- tree_health_data()$data %>%
+      data2 <- tree_health_data() %>%
         dplyr::select(-ends_with(c("net_returns", "realized_costs", "disease"))) %>%
         dplyr::filter(time==current_year()) %>%
         dplyr::mutate(
@@ -726,23 +708,23 @@ shinyServer(function(input, output, session) {
         tidyr::pivot_longer(-c(x,y,time)) %>%
         dplyr::mutate(yield=ifelse(value<0,0,value))
         # Use ggplot to plot the yield heatmap
-        plot <- data2 %>%
-          # The following lines ensure that if all of the yields are the same then 
-          # the plot doesn't turn grey (consequence of plotly converting the colorscale)
-          add_row(x=-2, y=1, yield=0, name='No Treatment') %>%
-          add_row(x=-1, y=1, yield=1, name='No Treatment') %>%
-          add_row(x=-2, y=1, yield=0, name='Treatment 1') %>%
-          add_row(x=-1, y=1, yield=1, name='Treatment 1') %>%
-          add_row(x=-2, y=1, yield=0, name='Treatment 2') %>%
-          add_row(x=-1, y=1, yield=1, name='Treatment 2') %>%
-          ggplot(aes(x=x,y=y,fill=yield)) +
-          geom_tile(linewidth=.1,show.legend = F) +
-          scale_fill_gradient(name="Tree Health",low = "red", high = "green", limits=c(0,1)) +
-          scale_x_continuous(name = "Column") +
-          scale_y_continuous(name = "Row") +
-          theme_bw(base_size = 15) +
-          labs(title = "Orchard Health") +
-          facet_wrap(~name,nrow = 1)
+      plot <- data2 %>%
+        # The following lines ensure that if all of the yields are the same then 
+        # the plot doesn't turn grey (consequence of plotly converting the colorscale)
+        add_row(x=-2, y=1, yield=0, name='No Treatment') %>%
+        add_row(x=-1, y=1, yield=1, name='No Treatment') %>%
+        add_row(x=-2, y=1, yield=0, name='Treatment 1') %>%
+        add_row(x=-1, y=1, yield=1, name='Treatment 1') %>%
+        add_row(x=-2, y=1, yield=0, name='Treatment 2') %>%
+        add_row(x=-1, y=1, yield=1, name='Treatment 2') %>%
+        ggplot(aes(x=x,y=y,fill=yield)) +
+        geom_tile(linewidth=.1,show.legend = F) +
+        scale_fill_gradient(name="Tree Health",low = "red", high = "green", limits=c(0,1)) +
+        scale_x_continuous(name = "Column") +
+        scale_y_continuous(name = "Row") +
+        theme_bw(base_size = 15) +
+        labs(title = "Orchard Health") +
+        facet_wrap(~name,nrow = 1)
         
         # Transform into a plotly plot
         fig <- ggplotly(plot, source='orchard_health') %>%
@@ -804,7 +786,7 @@ shinyServer(function(input, output, session) {
       # if hovering, plot the tree's yield over time. If not hovering, plot the
       # table row selected, otherwise render the overall orchard yield.
       selected_row <- input$mytable_rows_selected
-      df <- tree_health_data()$data %>% dplyr::select(-ends_with(c("tree_age", "disease")))
+      df <- tree_health_data() %>% dplyr::select(-ends_with(c("tree_age", "disease")))
       
       if (!is.null(most_recent_x_y_hover())) {
         p <- plot_tree_yield(df, x_coord=most_recent_x_y_hover()[["x"]], y_coord=most_recent_x_y_hover()[["y"]])
@@ -841,8 +823,9 @@ shinyServer(function(input, output, session) {
     })
     
     output$mytable <- DT::renderDataTable({
-      run_data_and_id <- tree_health_data()
-      tree_health_aggregated_orchard_cost_yield_and_returns <- run_data_and_id$data %>%
+      run_data <- tree_health_data()
+      
+      tree_health_aggregated_orchard_cost_yield_and_returns <- run_data %>%
         dplyr::select(-ends_with(c("tree_age", "disease"))) %>%
         group_by(time) %>%
         dplyr::summarize(across(-c(x,y),~sum(.,na.rm = T))) %>%
@@ -906,17 +889,6 @@ shinyServer(function(input, output, session) {
           t(), check.names = FALSE)
       )
       
-      
-      if (check_enough_time_has_passed_since_last_run()) {
-        future_promise({
-          add_data_to_data_store(
-            output_data %>%
-              rownames_to_column("Treatment Condition") %>% 
-              dplyr::mutate(ts=Sys.time(), run_id=run_data_and_id$id, .before=1),
-            'results')
-        })
-      }
-      
       # takes the data per treatment simulation and formats it into strings for the data table
       formatted_output_data <- output_data %>%
         dplyr::mutate(
@@ -948,192 +920,10 @@ shinyServer(function(input, output, session) {
     ### Prevents table label from rendering before data has returned. 
     output$table_label <- renderUI({
       datatable_label <- HTML("")
-      if(!is.na(tree_health_data()$id)){
+      if(nrow(tree_health_data()>0)){
         datatable_label <- HTML(" <h4><b>Economic Outcomes:</b>  <em>Click table rows to plot</em></h4>")
       } 
       datatable_label
-    })
-    
-    ######### Compare simulation outcomes ###########
-    
-    ##### Set up the triangle distributions for the variables that are changing
-    
-    distribution_sliders <- list(
-      list(name="disease_random_share_of_spread_range"),
-      list(name="inf_intro_range", range=c(1,576)),
-      list(name="disease_growth_rate_range"),
-      list(name="treatment_1_effectiveness_range"),
-      list(name="treatment_2_effectiveness_range"),
-      list(name="treatment_1_cost_range", range=c(0,2000)),
-      list(name="treatment_2_cost_range", range=c(0,2000)),
-      list(name="annual_cost_range", range=c(0,20000))
-    )
-    update_all_distributions <- function(){
-      update_triangle_distribution_slider <- function(slider_data){
-        slider_name <- slider_data$name
-        slider_range <- slider_data$range
-        if (any(is.null(slider_range))){
-          slider_range <- c(0,1)
-        }
-        observeEvent(input[[slider_name]], {
-          session$sendCustomMessage("updateSliderBoundsForExtraDot", c(slider_name, slider_range))
-        })
-      }
-      lapply(distribution_sliders, update_triangle_distribution_slider)
-    }
-    update_all_distributions()
-    
-    
-    create_triangle_distribution_slider <- function(slider_data){
-      slider_name <- slider_data$name
-      slider_range <- slider_data$range
-      if (any(is.null(slider_range))){
-        slider_range <- c(0,1)
-      }
-      # Only get the first "average" value one time on slider creation.
-      start <- isolate(input[[paste0(slider_name, "_avg")]])
-      
-      delay(300, session$sendCustomMessage("addExtraDotLabel", c(slider_name, slider_range, start)))
-    }
-    
-    # only creates the middle dots after the tab is opened for the first time
-    i <<- 1
-    observe({
-      if((input$main_tabs=="Compare Simulations")&&(i==1)){
-        if(i==1){
-          lapply(distribution_sliders, create_triangle_distribution_slider)
-          hide_ui("#simulation_parameters")
-          i <<- 2
-        }
-      }
-    })
-    
-    n_reset <- reactiveVal(1)
-    observeEvent(input$treatment_simulation_parameters_dropdown, {
-      if(n_reset()==1){
-        delay(500, update_all_distributions())
-        n_reset(2)
-      }
-      
-    })
-    
-    simulation_output_plot <- reactiveVal(NULL)
-    simulation_output_data <- reactiveVal(NULL)
-    output$download_simulation_results <- downloadHandler(
-      filename = function() {
-        # Use the selected dataset as the suggested file name
-        "simulation_results.csv"
-      },
-      content = function(file) {
-        # Write the dataset to the `file` that will be downloaded
-        write.csv(simulation_output_data(), file)
-      }
-    )
-    
-    observe({
-      if(!is.null(simulation_output_plot())){
-        if(simulation_output_plot()=="started_simulations"){
-          tryCatch(
-            future_promise(
-              ### calculate the distribution of simulation outcomes
-              generateManySimulations(
-                outcome_target, unchanging_settings, changing_settings, control_settings
-              ), seed=NULL) %>% then(
-                onFulfilled=function(results_dfm) {
-                  ## The data has ran now so we can remove the spinner!
-                  hide_ui("#loading_spinner")
-                  simulation_output_data(results_dfm)
-                  
-                  npv_comparison <- plot_treatment_simulation_averages(results_dfm)
-                  winning_comparison <- plot_treatment_simulation_proportions(results_dfm)
-                  # the NPV differences and percentages of similarities
-                  plot <- npv_comparison + winning_comparison
-                  show_ui("#simulation_outcome_plot")
-                  output$simulation_outcome_plot <- renderPlot({plot})
-                  show_ui("#reset_simulations_div")
-                  simulation_output_plot(NULL)
-                }),
-            error=function(e){},
-            NULL
-          )
-        }
-      }
-    })
-    
-    observeEvent(input$reset_simulations, {
-      hide_ui("#reset_simulations_div")
-      hide_ui("#simulation_outcome_plot")
-      output$simulation_outcome_plot <- renderPlot({})
-      show_ui("#compare_treatments")
-    })
-    
-    observeEvent(input$simulate_treatment_diffs, {
-      hide_ui("#compare_treatments")
-      if(is.null(input_yield_values())){
-        per_year_per_tree_max_yield <- isolate(input$max_yield/n_trees_in_orchard)
-      } else {
-        per_year_per_tree_max_yield <- isolate(input_yield_values())
-      }
-      unchanging_settings <<- isolate(list(
-        year_start = rv$start_year,
-        year_end = rv$end_year + 1,
-        t_disease_year = t_disease_year(),
-        t_treatment_year = t_treatment_year(),
-        
-        max_yield = per_year_per_tree_max_yield,
-        remove_cost_tree = input$remove_cost_tree,
-        replant_cost_tree = input$replant_cost_tree,
-        replant_cost_orchard = input$replant_cost_orchard,
-        remove_tree_block_size=0, # TODO: decide if this should also be removed in blocks
-        
-        output_price = output_price(),
-        input_annual_price_change = input$percent_cost_change/100,
-        output_annual_price_change = input$percent_price_change/100,
-        
-        ### will remove
-        disease_spread_rate = input$disease_spread_rate/100,
-        percent_interest = 3,
-        annual_cost=input$annual_cost
-      ))
-      
-      changing_settings <<- isolate(list(
-        inf_intro                      = sapply(c(input$inf_intro_range,                      input$inf_intro_range_avg),                      as.numeric, USE.NAMES=F),
-        disease_random_share_of_spread = sapply(c(input$disease_random_share_of_spread_range, input$disease_random_share_of_spread_range_avg), as.numeric, USE.NAMES=F),
-        disease_growth_rate            = sapply(c(input$disease_growth_rate_range,            input$disease_growth_rate_range_avg),            as.numeric, USE.NAMES=F),
-        control1                       = sapply(c(input$treatment_1_effectiveness_range,      input$treatment_1_effectiveness_range_avg),      as.numeric, USE.NAMES=F),
-        control2                       = sapply(c(input$treatment_2_effectiveness_range,      input$treatment_2_effectiveness_range_avg),      as.numeric, USE.NAMES=F),
-        t1_cost                        = sapply(c(input$treatment_1_cost_range,               input$treatment_1_cost_range_avg),               as.numeric, USE.NAMES=F),
-        t2_cost                        = sapply(c(input$treatment_2_cost_range,               input$treatment_2_cost_range_avg),               as.numeric, USE.NAMES=F)
-      ))
-      
-      
-      ### I'm thinking about adding these as other control strategies, 
-      ### but it's difficult because it exponentiates the processing time
-      
-      control_settings <<- list(
-        list(
-       #  replanting_strategy = "tree_replant",
-       #  replant_tree_block_size = 2,
-       #  replant_years = c(20)
-       #), list(
-          replanting_strategy = "orchard_replant",
-          replant_tree_block_size = 0,
-          replant_years=get_planting_years(n_replant_years = 20)
-        )
-       #, list(
-       #   replanting_strategy = "orchard_replant",
-       #   replant_tree_block_size = 0,
-       #   replant_years=get_planting_years(n_replant_years = 15)
-       # ), list(
-       #   replanting_strategy = "orchard_replant",
-       #   replant_tree_block_size = 0,
-       #   replant_years=get_planting_years(n_replant_years = 10)
-       # )
-      )
-      ### generate multiple simulations
-      show_ui("#loading_spinner")
-      output$simulation_outcome_plot <- renderPlot({})
-      delay(1000, simulation_output_plot("started_simulations"))
     })
   
 })
