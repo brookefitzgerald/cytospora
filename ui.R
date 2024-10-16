@@ -431,7 +431,7 @@ decision_engine_panel <- fluidPage(
     fluidRow(plotlyOutput("de_prune_plot", height="700px")))
 )
 
-tutorial_panel <- img(id="coming_soon", src="images/coming_soon.png", class="center", height="500px")
+tutorial_panel <- tags$iframe(style="height:1500px; width:100%", src="user_manual_pdf.pdf")
 
 ui <- tabsetPanel(
     id = "panels",
